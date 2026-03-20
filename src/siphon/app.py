@@ -55,9 +55,8 @@ def create_app(config: SiphonConfig) -> FastAPI:
                 minutes=config.schedule.check_interval_minutes,
                 args=[config, db],
                 id='check_feeds',
-                name='Check YouTube feeds',
+                name='Check feeds',
             )
-            # Use the shorter of the two download intervals
             dl_interval = min(
                 config.schedule.youtube_download_interval_minutes,
                 config.schedule.podcast_download_interval_minutes,
@@ -70,6 +69,7 @@ def create_app(config: SiphonConfig) -> FastAPI:
                 name='Process downloads',
             )
             scheduler.start()
+            app.state.scheduler = scheduler
             logger.info("Scheduler started")
         except Exception as e:
             logger.warning(f"Scheduler failed to start: {e}")
@@ -87,15 +87,19 @@ def create_app(config: SiphonConfig) -> FastAPI:
         title="Siphon",
         description="Self-hosted YouTube-to-podcast bridge",
         lifespan=lifespan,
-        dependencies=[Depends(auth_dep)],
     )
 
     from siphon.routes.feeds import router as feeds_router
     from siphon.routes.media import router as media_router
     from siphon.routes.api import router as api_router
+    from siphon.routes.ui import router as ui_router
 
-    app.include_router(feeds_router)
-    app.include_router(media_router)
-    app.include_router(api_router)
+    # RSS, media, and API routes require auth
+    app.include_router(feeds_router, dependencies=[Depends(auth_dep)])
+    app.include_router(media_router, dependencies=[Depends(auth_dep)])
+    app.include_router(api_router, dependencies=[Depends(auth_dep)])
+
+    # Web UI does NOT require auth — local/Tailscale access only
+    app.include_router(ui_router)
 
     return app

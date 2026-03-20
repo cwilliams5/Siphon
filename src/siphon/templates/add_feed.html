@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title_suffix %} - Add Feed{% endblock %}
+{% block content %}
+<h1>Add Feed</h1>
+
+<div class="card">
+  <form method="post" action="/ui/add">
+    <div class="form-row">
+      <div class="form-group" style="flex:2;">
+        <label>Feed URL</label>
+        <input type="text" name="url" placeholder="https://www.youtube.com/@Channel or https://podcast.com/rss" style="width:100%;" required
+               value="{{ prefill.url or '' }}">
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <select name="type" id="feed-type">
+          <option value="youtube" {% if prefill.type == 'youtube' %}selected{% endif %}>YouTube</option>
+          <option value="podcast" {% if prefill.type == 'podcast' %}selected{% endif %}>Podcast</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Name (slug)</label>
+        <input type="text" name="name" placeholder="my-channel" value="{{ prefill.name or '' }}" required>
+      </div>
+      <div class="form-group">
+        <label>Mode</label>
+        <select name="mode">
+          <option value="" {% if not prefill.mode %}selected{% endif %}>Default</option>
+          <option value="video" {% if prefill.mode == 'video' %}selected{% endif %}>Video</option>
+          <option value="audio" {% if prefill.mode == 'audio' %}selected{% endif %}>Audio</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Quality</label>
+        <input type="text" name="quality" placeholder="1440 or max" value="{{ prefill.quality or '' }}">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>LLM Trim</label>
+        <select name="llm_trim">
+          <option value="" {% if not prefill.llm_trim %}selected{% endif %}>Default</option>
+          <option value="true" {% if prefill.llm_trim == 'true' %}selected{% endif %}>On</option>
+          <option value="false" {% if prefill.llm_trim == 'false' %}selected{% endif %}>Off</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Date Cutoff</label>
+        <input type="text" name="date_cutoff" placeholder="YYYYMMDD" value="{{ prefill.date_cutoff or '' }}">
+      </div>
+      <div class="form-group">
+        <label>Title Exclude</label>
+        <input type="text" name="title_exclude" placeholder="comma,separated" value="{{ prefill.title_exclude or '' }}">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Claude Prompt Extra</label>
+      <textarea name="claude_prompt_extra" rows="2" placeholder="Additional instructions for ad detection...">{{ prefill.claude_prompt_extra or '' }}</textarea>
+    </div>
+    <button type="submit">Add Feed</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title_suffix %} - Feeds{% endblock %}
+{% block content %}
+<h1>Feeds</h1>
+
+<div class="status-bar">
+  <div class="stat">
+    <div class="stat-value">{{ feeds | length }}</div>
+    <div class="stat-label">Total Feeds</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">{{ disk_usage_gb }} GB</div>
+    <div class="stat-label">Disk Used / {{ max_disk_gb }} GB</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">{{ total_episodes }}</div>
+    <div class="stat-label">Episodes</div>
+  </div>
+</div>
+
+{% for feed in feeds %}
+<div class="card">
+  <div class="card-header">
+    <div>
+      <strong>{{ feed.name }}</strong>
+      <span class="badge {% if feed.feed_type == 'podcast' %}badge-pod{% else %}badge-yt{% endif %}">
+        {{ feed.feed_type }}
+      </span>
+      {% if feed.llm_trim %}
+      <span class="badge badge-llm">LLM</span>
+      {% endif %}
+    </div>
+    <div style="display:flex; gap:8px;">
+      <a href="/feed/{{ feed.name }}" class="btn btn-secondary btn-small" target="_blank">RSS</a>
+      <button class="btn btn-small" onclick="toggleEdit('{{ feed.name }}')">Edit</button>
+      <form method="post" action="/ui/feed/{{ feed.name }}/catchup" style="display:inline;"
+            onsubmit="return confirm('Mark {{ feed.name }} as caught up? This deletes all downloaded files and sets date_cutoff to today.')">
+        <button type="submit" class="btn btn-danger btn-small">Mark Caught Up</button>
+      </form>
+    </div>
+  </div>
+  <div style="font-size:0.85em; color:#888;">
+    {{ feed.url }}
+    {% if feed.last_checked_at %} &mdash; Last checked: {{ feed.last_checked_at }}{% endif %}
+    {% if feed.last_error %} &mdash; <span style="color:#e74c3c">Error: {{ feed.last_error }}</span>{% endif %}
+  </div>
+  <div style="font-size:0.85em; color:#888; margin-top:4px;">
+    Episodes: {{ feed.episode_counts | default({}) }}
+  </div>
+
+  <div id="edit-{{ feed.name }}" class="hidden" style="margin-top:12px; padding-top:12px; border-top:1px solid #333;">
+    <form method="post" action="/ui/feed/{{ feed.name }}/update">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Mode</label>
+          <select name="mode">
+            <option value="video" {% if feed.mode == 'video' %}selected{% endif %}>Video</option>
+            <option value="audio" {% if feed.mode == 'audio' %}selected{% endif %}>Audio</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Quality</label>
+          <input type="text" name="quality" value="{{ feed.quality }}" placeholder="1440 or max">
+        </div>
+        <div class="form-group">
+          <label>SponsorBlock</label>
+          <select name="sponsorblock">
+            <option value="true" {% if feed.sponsorblock %}selected{% endif %}>On</option>
+            <option value="false" {% if not feed.sponsorblock %}selected{% endif %}>Off</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>LLM Trim</label>
+          <select name="llm_trim">
+            <option value="true" {% if feed.llm_trim %}selected{% endif %}>On</option>
+            <option value="false" {% if not feed.llm_trim %}selected{% endif %}>Off</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Block Shorts</label>
+          <select name="block_shorts">
+            <option value="true" {% if feed.block_shorts %}selected{% endif %}>On</option>
+            <option value="false" {% if not feed.block_shorts %}selected{% endif %}>Off</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Min Duration (sec)</label>
+          <input type="number" name="min_duration_seconds" value="{{ feed.min_duration_seconds }}">
+        </div>
+        <div class="form-group">
+          <label>Date Cutoff (YYYYMMDD)</label>
+          <input type="text" name="date_cutoff" value="{{ feed.date_cutoff or '' }}" placeholder="e.g. 20240101">
+        </div>
+        <div class="form-group">
+          <label>SponsorBlock Delay (min)</label>
+          <input type="number" name="sponsorblock_delay_minutes" value="{{ feed.sponsorblock_delay_minutes }}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Title Exclude (comma-separated)</label>
+        <input type="text" name="title_exclude" value="{{ feed.title_exclude | join(', ') }}" style="width:100%;">
+      </div>
+      <div class="form-group">
+        <label>Claude Prompt Extra</label>
+        <textarea name="claude_prompt_extra" rows="2">{{ feed.claude_prompt_extra or '' }}</textarea>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button type="submit" class="btn btn-small">Save</button>
+        <form method="post" action="/ui/feed/{{ feed.name }}/delete" style="display:inline;"
+              onsubmit="return confirm('Delete feed {{ feed.name }}? This removes all episodes and files.')">
+          <button type="submit" class="btn btn-danger btn-small">Delete Feed</button>
+        </form>
+      </div>
+    </form>
+  </div>
+</div>
+{% endfor %}
+
+{% if not feeds %}
+<div class="card" style="text-align:center; color:#888; padding:40px;">
+  No feeds configured. <a href="/ui/add">Add one</a> or <a href="/ui/import">import OPML</a>.
+</div>
+{% endif %}
+
+<script>
+function toggleEdit(name) {
+  const el = document.getElementById('edit-' + name);
+  el.classList.toggle('hidden');
+}
+</script>
+{% endblock %}

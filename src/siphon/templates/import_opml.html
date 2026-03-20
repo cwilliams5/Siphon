@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title_suffix %} - Import OPML{% endblock %}
+{% block content %}
+<h1>Import OPML</h1>
+
+{% if not feeds_to_review %}
+<div class="card">
+  <p style="margin-bottom:12px; color:#aaa;">Upload an OPML file exported from Pocket Casts or another podcast app.</p>
+  <form method="post" action="/ui/import" enctype="multipart/form-data">
+    <div class="form-group">
+      <label>OPML File</label>
+      <input type="file" name="opml_file" accept=".opml,.xml" required>
+    </div>
+    <button type="submit">Upload & Review</button>
+  </form>
+</div>
+{% else %}
+<div class="card">
+  <p style="margin-bottom:12px; color:#aaa;">
+    Found <strong>{{ feeds_to_review | length }}</strong> feeds. Review settings and uncheck any you don't want to import.
+  </p>
+  <form method="post" action="/ui/import/confirm">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:30px;"></th>
+          <th>Name</th>
+          <th>URL</th>
+          <th>Date Cutoff</th>
+          <th>LLM Trim</th>
+          <th>Title Exclude</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for feed in feeds_to_review %}
+        <tr>
+          <td><input type="checkbox" name="import_{{ loop.index0 }}" value="1" checked></td>
+          <td>
+            <input type="text" name="name_{{ loop.index0 }}" value="{{ feed.name }}" style="width:150px;">
+            <input type="hidden" name="url_{{ loop.index0 }}" value="{{ feed.url }}">
+          </td>
+          <td style="font-size:0.8em; color:#888; max-width:250px; overflow:hidden; text-overflow:ellipsis;">
+            {{ feed.url }}
+          </td>
+          <td><input type="text" name="date_cutoff_{{ loop.index0 }}" placeholder="YYYYMMDD" style="width:100px;"></td>
+          <td>
+            <select name="llm_trim_{{ loop.index0 }}">
+              <option value="">Default</option>
+              <option value="true">On</option>
+              <option value="false">Off</option>
+            </select>
+          </td>
+          <td><input type="text" name="title_exclude_{{ loop.index0 }}" placeholder="comma,separated" style="width:140px;"></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <input type="hidden" name="total" value="{{ feeds_to_review | length }}">
+    <div style="margin-top:16px; display:flex; gap:8px;">
+      <button type="submit">Import Selected</button>
+      <a href="/ui/import" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
