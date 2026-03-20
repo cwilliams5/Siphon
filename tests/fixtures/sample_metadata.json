@@ -1,0 +1,40 @@
+{
+  "_type": "playlist",
+  "id": "UC9-y-6csu5WGm29I7JiwpnA",
+  "title": "Technology Connections",
+  "entries": [
+    {
+      "id": "dQw4w9WgXcQ",
+      "title": "Test Video Title",
+      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "duration": 300,
+      "view_count": 1000000,
+      "upload_date": "20240115",
+      "description": "A test video description",
+      "channel": "Technology Connections",
+      "thumbnail": "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
+    },
+    {
+      "id": "abc123shorts",
+      "title": "Quick Short #shorts",
+      "url": "https://www.youtube.com/shorts/abc123shorts",
+      "duration": 45,
+      "view_count": 500000,
+      "upload_date": "20240120",
+      "description": "A short video",
+      "channel": "Technology Connections",
+      "thumbnail": "https://i.ytimg.com/vi/abc123shorts/maxresdefault.jpg"
+    },
+    {
+      "id": "xyz789long",
+      "title": "A Deep Dive Into Something",
+      "url": "https://www.youtube.com/watch?v=xyz789long",
+      "duration": 1800,
+      "view_count": 750000,
+      "upload_date": "20240201",
+      "description": "An in-depth exploration",
+      "channel": "Technology Connections",
+      "thumbnail": "https://i.ytimg.com/vi/xyz789long/maxresdefault.jpg"
+    }
+  ]
+}

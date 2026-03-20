@@ -1,0 +1,228 @@
+"""Configuration models for Siphon, validated with Pydantic v2."""
+
+from __future__ import annotations
+
+import textwrap
+from pathlib import Path
+from typing import Literal, Optional, Union
+
+import yaml
+from pydantic import BaseModel, field_validator
+
+# Quality type: an integer (e.g. 1080, 1440) or the literal "max"
+Quality = Union[int, Literal["max"]]
+
+DEFAULT_AD_PROMPT = textwrap.dedent("""\
+    You are analyzing a podcast/video transcript to identify non-content segments
+    that should be removed for personal use. Identify any of the following:
+    - Paid sponsor reads or product promotions
+    - Patreon, membership, or donation pitches
+    - Merchandise promotion
+    - Social media follow requests
+    - Newsletter or mailing list signups
+    - App review/subscribe/like requests
+    - Live show or event ticket promotions
+    - Cross-promotion of other shows or networks
+    - The host's own book, course, or consulting pitch
+
+    Return ONLY a JSON file written to the output path provided. No explanation,
+    no markdown fences, just the raw JSON. Format:
+    {
+      "segments": [
+        {
+          "start": 0.0,
+          "end": 0.0,
+          "type": "ad",
+          "label": "brief human-readable label",
+          "confidence": 0.0
+        }
+      ]
+    }
+    Confidence is 0.0-1.0. Only include segments with confidence >= 0.5.
+    If no ad segments found, return {"segments": []}.
+""")
+
+
+class ServerConfig(BaseModel):
+    host: str
+    port: int
+    base_url: str
+
+
+class AuthConfig(BaseModel):
+    username: str
+    password: str
+
+
+class StorageConfig(BaseModel):
+    download_dir: str
+    database: str
+    max_disk_gb: int = 100
+    youtube_keep_per_feed: int = 50
+    podcast_keep_per_feed: int = 200
+
+
+class ScheduleConfig(BaseModel):
+    check_interval_minutes: int = 30
+    feeds_per_check: int = 10
+
+    # YouTube — gentle on a single platform
+    youtube_download_interval_minutes: int = 5
+    youtube_download_workers: int = 2
+    youtube_download_delay_seconds: int = 120
+    youtube_max_downloads_per_hour: int = 10
+
+    # Podcast — many different hosts, small files
+    podcast_download_interval_minutes: int = 5
+    podcast_download_workers: int = 10
+    podcast_download_delay_seconds: int = 2
+    podcast_max_downloads_per_hour: int = 120
+
+
+class CookiesConfig(BaseModel):
+    source: str = "browser"
+    browser: str = "firefox"
+
+
+class LLMConfig(BaseModel):
+    whisper_model: str = "base"
+    whisper_device: str = "cpu"
+    claude_model: str = "claude-sonnet-4-6"
+    claude_concurrency: int = 3
+    claude_effort: str = "medium"
+    default_ad_prompt: str = DEFAULT_AD_PROMPT
+    confidence_threshold: float = 0.75
+    min_segment_duration: int = 7
+    max_segment_duration: int = 300
+
+
+class FeedDefaults(BaseModel):
+    mode: Literal["video", "audio"] = "video"
+    quality: Quality = 1440
+    sponsorblock: bool = True
+    sponsorblock_categories: list[str] = [
+        "sponsor",
+        "selfpromo",
+        "interaction",
+        "intro",
+        "outro",
+    ]
+    sponsorblock_delay_minutes: int = 4320
+    force_keyframes_at_cuts: bool = True
+    block_shorts: bool = True
+    min_duration_seconds: int = 60
+    date_cutoff: str | None = None
+    title_exclude: list[str] = []
+    llm_trim: bool = False
+
+    @field_validator("quality", mode="before")
+    @classmethod
+    def _validate_quality(cls, v: object) -> Quality:
+        if isinstance(v, str):
+            if v.lower() == "max":
+                return "max"
+            # Allow numeric strings like "1080"
+            try:
+                return int(v)
+            except ValueError:
+                raise ValueError(f"quality must be an integer or 'max', got {v!r}")
+        return v  # type: ignore[return-value]
+
+
+class FeedConfig(BaseModel):
+    """Per-feed configuration. All FeedDefaults fields are optional so that
+    omitted values inherit from the top-level defaults."""
+
+    name: str
+    url: str
+    type: Literal["youtube", "podcast"] = "youtube"
+
+    mode: Optional[Literal["video", "audio"]] = None
+    quality: Optional[Quality] = None
+    sponsorblock: Optional[bool] = None
+    sponsorblock_categories: Optional[list[str]] = None
+    sponsorblock_delay_minutes: Optional[int] = None
+    force_keyframes_at_cuts: Optional[bool] = None
+    block_shorts: Optional[bool] = None
+    min_duration_seconds: Optional[int] = None
+    date_cutoff: Optional[str] = None
+    title_exclude: Optional[list[str]] = None
+    llm_trim: Optional[bool] = None
+
+    # Per-feed prompt customization (not in FeedDefaults)
+    claude_prompt_extra: Optional[str] = None
+    claude_prompt_override: Optional[str] = None
+
+    @field_validator("quality", mode="before")
+    @classmethod
+    def _validate_quality(cls, v: object) -> Quality | None:
+        if v is None:
+            return None
+        if isinstance(v, str):
+            if v.lower() == "max":
+                return "max"
+            try:
+                return int(v)
+            except ValueError:
+                raise ValueError(f"quality must be an integer or 'max', got {v!r}")
+        return v  # type: ignore[return-value]
+
+
+class ResolvedFeed(BaseModel):
+    """A feed with all defaults resolved — no Optional fields."""
+
+    name: str
+    url: str
+    type: Literal["youtube", "podcast"]
+    mode: Literal["video", "audio"]
+    quality: Quality
+    sponsorblock: bool
+    sponsorblock_categories: list[str]
+    sponsorblock_delay_minutes: int
+    force_keyframes_at_cuts: bool
+    block_shorts: bool
+    min_duration_seconds: int
+    date_cutoff: str | None
+    title_exclude: list[str]
+    llm_trim: bool
+
+    # Per-feed prompt customization (no default fallback)
+    claude_prompt_extra: str | None = None
+    claude_prompt_override: str | None = None
+
+
+class SiphonConfig(BaseModel):
+    server: ServerConfig
+    auth: AuthConfig
+    storage: StorageConfig
+    schedule: ScheduleConfig = ScheduleConfig()
+    cookies: CookiesConfig = CookiesConfig()
+    defaults: FeedDefaults = FeedDefaults()
+    llm: LLMConfig = LLMConfig()
+    feeds: list[FeedConfig]
+
+
+def resolve_feed(feed: FeedConfig, defaults: FeedDefaults) -> ResolvedFeed:
+    """Merge a FeedConfig onto FeedDefaults.
+
+    For every field defined in FeedDefaults, use the feed-level value when it
+    is not None; otherwise fall back to the corresponding default value.
+    """
+    merged: dict = {"name": feed.name, "url": feed.url, "type": feed.type}
+    for field_name in FeedDefaults.model_fields:
+        feed_value = getattr(feed, field_name)
+        if feed_value is not None:
+            merged[field_name] = feed_value
+        else:
+            merged[field_name] = getattr(defaults, field_name)
+    # Per-feed-only fields (not in FeedDefaults)
+    merged["claude_prompt_extra"] = feed.claude_prompt_extra
+    merged["claude_prompt_override"] = feed.claude_prompt_override
+    return ResolvedFeed(**merged)
+
+
+def load_config(path: str) -> SiphonConfig:
+    """Read a YAML file and return a validated SiphonConfig."""
+    raw = Path(path).read_text(encoding="utf-8")
+    data = yaml.safe_load(raw)
+    return SiphonConfig(**data)

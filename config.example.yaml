@@ -1,0 +1,89 @@
+server:
+  host: "0.0.0.0"
+  port: 8585
+  base_url: "https://mypc.tailnet-name.ts.net"
+
+auth:
+  username: "siphon"
+  password: "a-strong-password-here"
+
+storage:
+  download_dir: "/path/to/downloads"
+  database: "./siphon.db"
+  max_disk_gb: 1000
+  youtube_keep_per_feed: 50
+  podcast_keep_per_feed: 200
+
+schedule:
+  check_interval_minutes: 30
+  feeds_per_check: 10
+
+  # YouTube — gentle on a single platform
+  youtube_download_interval_minutes: 5
+  youtube_download_workers: 2
+  youtube_download_delay_seconds: 120
+  youtube_max_downloads_per_hour: 10
+
+  # Podcast — many different hosts, small files
+  podcast_download_interval_minutes: 5
+  podcast_download_workers: 10
+  podcast_download_delay_seconds: 2
+  podcast_max_downloads_per_hour: 120
+
+cookies:
+  source: "browser"
+  browser: "firefox"
+
+llm:
+  whisper_model: "base"           # tiny | base | small | medium | large
+  whisper_device: "cpu"           # cpu | cuda
+  claude_model: "claude-sonnet-4-6"
+  claude_concurrency: 3
+  claude_effort: "medium"         # low | medium | high | max
+  confidence_threshold: 0.75
+  min_segment_duration: 7
+  max_segment_duration: 300
+
+defaults:
+  mode: "video"
+  quality: 1440
+  sponsorblock: true
+  sponsorblock_categories:
+    - sponsor
+    - selfpromo
+    - interaction
+    - intro
+    - outro
+  sponsorblock_delay_minutes: 4320
+  force_keyframes_at_cuts: true
+  block_shorts: true
+  min_duration_seconds: 60
+  date_cutoff: null
+  title_exclude: []
+  llm_trim: false
+
+feeds:
+  - name: "technology-connections"
+    url: "https://www.youtube.com/@TechnologyConnections"
+
+  - name: "3blue1brown"
+    url: "https://www.youtube.com/@3blue1brown"
+    sponsorblock_delay_minutes: 0
+
+  - name: "some-music-channel"
+    url: "https://www.youtube.com/@SomeChannel"
+    mode: "audio"
+    quality: 720
+    title_exclude: ["#shorts", "community"]
+    date_cutoff: "20240601"
+
+  - name: "max-quality-channel"
+    url: "https://www.youtube.com/@HighRes"
+    quality: "max"
+
+  - name: "some-podcast"
+    url: "https://somepodcast.com/rss"
+    type: podcast
+    llm_trim: true
+    claude_prompt_extra: |
+      Also remove segments where the host promotes their Discord server.

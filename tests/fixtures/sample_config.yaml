@@ -1,0 +1,62 @@
+server:
+  host: "127.0.0.1"
+  port: 8585
+  base_url: "https://test.example.com"
+
+auth:
+  username: "testuser"
+  password: "testpass"
+
+storage:
+  download_dir: "./test_media"
+  database: ":memory:"
+  max_disk_gb: 10
+  youtube_keep_per_feed: 5
+  podcast_keep_per_feed: 20
+
+schedule:
+  check_interval_minutes: 30
+  feeds_per_check: 5
+  youtube_download_interval_minutes: 5
+  youtube_download_workers: 1
+  youtube_download_delay_seconds: 120
+  youtube_max_downloads_per_hour: 10
+  podcast_download_interval_minutes: 5
+  podcast_download_workers: 10
+  podcast_download_delay_seconds: 2
+  podcast_max_downloads_per_hour: 120
+
+cookies:
+  source: "browser"
+  browser: "firefox"
+
+defaults:
+  mode: "video"
+  quality: 1080
+  sponsorblock: true
+  sponsorblock_categories:
+    - sponsor
+    - selfpromo
+  sponsorblock_delay_minutes: 0
+  force_keyframes_at_cuts: true
+  block_shorts: true
+  min_duration_seconds: 60
+  date_cutoff: null
+  title_exclude: []
+  llm_trim: false
+
+feeds:
+  - name: "test-channel"
+    url: "https://www.youtube.com/@TestChannel"
+
+  - name: "test-channel-2"
+    url: "https://www.youtube.com/@TestChannel2"
+    sponsorblock: false
+    title_exclude: ["#shorts", "live"]
+
+  - name: "test-podcast"
+    url: "https://example.com/podcast/rss"
+    type: podcast
+    mode: "audio"
+    llm_trim: true
+    claude_prompt_extra: "Also remove Discord promotions."

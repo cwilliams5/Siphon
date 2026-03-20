@@ -1,0 +1,48 @@
+"""Health and management API endpoints."""
+import asyncio
+
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
+
+router = APIRouter()
+
+@router.get("/health")
+async def health(request: Request):
+    db = request.app.state.db
+    config = request.app.state.config
+
+    feeds = db.get_all_feeds()
+    disk_usage = db.get_disk_usage()
+
+    feed_status = []
+    for feed in feeds:
+        episodes = db.get_episodes_by_feed(feed["name"])
+        status_counts = {}
+        for ep in episodes:
+            s = ep["status"]
+            status_counts[s] = status_counts.get(s, 0) + 1
+        feed_status.append({
+            "name": feed["name"],
+            "last_checked_at": feed.get("last_checked_at"),
+            "last_error": feed.get("last_error"),
+            "episodes": status_counts,
+        })
+
+    return JSONResponse({
+        "status": "ok",
+        "feeds": feed_status,
+        "disk_usage_bytes": disk_usage,
+        "disk_usage_gb": round(disk_usage / (1024**3), 2),
+        "max_disk_gb": config.storage.max_disk_gb,
+    })
+
+@router.post("/refresh")
+async def refresh(request: Request):
+    from siphon.pipeline import check_feeds
+    config = request.app.state.config
+    db = request.app.state.db
+
+    # Run check_feeds in background
+    asyncio.create_task(check_feeds(config, db))
+
+    return JSONResponse({"status": "accepted"}, status_code=202)
