@@ -225,4 +225,7 @@ def load_config(path: str) -> SiphonConfig:
     """Read a YAML file and return a validated SiphonConfig."""
     raw = Path(path).read_text(encoding="utf-8")
     data = yaml.safe_load(raw)
-    return SiphonConfig(**data)
+    cfg = SiphonConfig(**data)
+    # Store the source path so the UI can save back to it
+    cfg._config_path = str(Path(path).resolve())  # type: ignore[attr-defined]
+    return cfg

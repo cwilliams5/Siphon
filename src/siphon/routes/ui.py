@@ -452,11 +452,9 @@ def _save_config(config) -> None:
 
     data = _clean(data)
 
-    # Find the config path — stored as a module-level detail
-    # For now, save to config.yaml in working directory
-    config_path = Path("config.yaml")
-    if config_path.exists() or True:  # always save
-        config_path.write_text(
-            yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True),
-            encoding="utf-8",
-        )
+    # Use the path the config was originally loaded from
+    config_path = Path(getattr(config, "_config_path", "config.yaml"))
+    config_path.write_text(
+        yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
