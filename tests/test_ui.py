@@ -1,5 +1,6 @@
 """Tests for the web UI routes."""
 
+import asyncio
 import os
 from unittest.mock import patch
 
@@ -307,3 +308,115 @@ class TestOPMLImport:
             files={"opml_file": ("empty.opml", b"<opml><body></body></opml>", "application/xml")})
         assert resp.status_code == 200
         assert "No feeds found" in resp.text
+
+
+class TestCheckNow:
+    """Verify that POST /ui/check-now actually runs the background task to completion."""
+
+    @pytest.fixture
+    async def app_and_client(self, tmp_path):
+        """Yield (app, client) so the test can inspect app.state.db."""
+        config = SiphonConfig(
+            server=ServerConfig(host="127.0.0.1", port=8585, base_url="https://test.example.com"),
+            auth=AuthConfig(username="testuser", password="testpass"),
+            storage=StorageConfig(
+                download_dir=str(tmp_path / "media"),
+                database=str(tmp_path / "test.db"),
+                max_disk_gb=10,
+                youtube_keep_per_feed=5,
+                podcast_keep_per_feed=20,
+            ),
+            schedule=ScheduleConfig(
+                check_interval_minutes=30,
+                youtube_feeds_per_check=10,
+                podcast_feeds_per_check=30,
+            ),
+            cookies=CookiesConfig(),
+            defaults=FeedDefaults(sponsorblock_delay_minutes=0),
+            feeds=[
+                FeedConfig(name="test-feed", url="https://www.youtube.com/@TestChannel"),
+            ],
+        )
+        old_cwd = os.getcwd()
+        os.chdir(str(tmp_path))
+        try:
+            with patch.dict("sys.modules", {
+                "apscheduler": None,
+                "apscheduler.schedulers": None,
+                "apscheduler.schedulers.asyncio": None,
+            }):
+                app = create_app(config)
+                async with app.router.lifespan_context(app):
+                    transport = httpx.ASGITransport(app=app)
+                    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+                        yield app, c
+        finally:
+            os.chdir(old_cwd)
+
+    async def test_check_now_runs_background_task(self, app_and_client):
+        """POST /ui/check-now must launch a background task that actually inserts episodes."""
+        app, client = app_and_client
+        db = app.state.db
+
+        fake_entries = [
+            {
+                "id": "bg-vid-001",
+                "title": "Background Check Video",
+                "url": "https://www.youtube.com/watch?v=bg-vid-001",
+                "duration": 600,
+                "upload_date": "20250601",
+                "description": "Test",
+                "channel": "TestChannel",
+                "thumbnail": "https://img.youtube.com/vi/bg-vid-001/0.jpg",
+            },
+            {
+                "id": "bg-vid-002",
+                "title": "Second Background Video",
+                "url": "https://www.youtube.com/watch?v=bg-vid-002",
+                "duration": 900,
+                "upload_date": "20250602",
+                "description": "Test 2",
+                "channel": "TestChannel",
+                "thumbnail": "https://img.youtube.com/vi/bg-vid-002/0.jpg",
+            },
+        ]
+
+        with patch("siphon.pipeline.extract_feed_metadata", return_value={"entries": fake_entries}):
+            resp = await client.post("/ui/check-now", follow_redirects=False)
+            assert resp.status_code == 303
+
+            # Wait for the background task to finish.
+            # The task set lives on app.state; drain it.
+            tasks = getattr(app.state, "_background_tasks", set())
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Verify episodes were actually inserted
+        ep1 = db.get_episode("bg-vid-001", "test-feed")
+        ep2 = db.get_episode("bg-vid-002", "test-feed")
+
+        assert ep1 is not None, "Episode bg-vid-001 was not inserted — background task did not run"
+        assert ep1["title"] == "Background Check Video"
+        assert ep1["status"] == "pending"
+
+        assert ep2 is not None, "Episode bg-vid-002 was not inserted — background task did not run"
+        assert ep2["title"] == "Second Background Video"
+        assert ep2["status"] == "pending"
+
+    async def test_check_now_task_error_is_logged_not_swallowed(self, app_and_client):
+        """If check_feeds raises, the task wrapper must catch it (not crash the server)."""
+        app, client = app_and_client
+
+        with patch("siphon.pipeline.extract_feed_metadata", side_effect=RuntimeError("boom")):
+            resp = await client.post("/ui/check-now", follow_redirects=False)
+            assert resp.status_code == 303
+
+            tasks = getattr(app.state, "_background_tasks", set())
+            if tasks:
+                # Should not raise — the wrapper catches the exception
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Feed should have an error recorded
+        db = app.state.db
+        feed = db.get_feed("test-feed")
+        assert feed["last_error"] == "boom"

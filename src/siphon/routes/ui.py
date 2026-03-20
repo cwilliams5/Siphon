@@ -30,6 +30,13 @@ def _get_messages(request: Request) -> list[dict]:
     return getattr(request.state, "messages", [])
 
 
+def _get_background_tasks(app) -> set:
+    """Return (and lazily create) the set of strong task references on app.state."""
+    if not hasattr(app.state, "_background_tasks"):
+        app.state._background_tasks = set()
+    return app.state._background_tasks
+
+
 def _slugify(name: str) -> str:
     s = name.lower().strip()
     s = re.sub(r"[^\w\s-]", "", s)
@@ -142,7 +149,10 @@ async def check_now(request: Request):
         except Exception as e:
             logger.error("Manual feed check failed: %s", e, exc_info=True)
 
-    asyncio.create_task(_check_with_logging())
+    # Keep a strong reference so the task isn't garbage-collected mid-flight.
+    task = asyncio.create_task(_check_with_logging())
+    _get_background_tasks(request.app).add(task)
+    task.add_done_callback(_get_background_tasks(request.app).discard)
 
     return RedirectResponse("/ui/", status_code=303)
 

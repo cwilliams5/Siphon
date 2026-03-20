@@ -49,9 +49,19 @@ async def refresh(request: Request):
     config = request.app.state.config
     db = request.app.state.db
 
-    asyncio.create_task(check_feeds(config, db))
+    # Keep a strong reference so the task isn't garbage-collected mid-flight.
+    task = asyncio.create_task(check_feeds(config, db))
+    _get_background_tasks(request.app).add(task)
+    task.add_done_callback(_get_background_tasks(request.app).discard)
 
     return JSONResponse({"status": "accepted"}, status_code=202)
+
+
+def _get_background_tasks(app) -> set:
+    """Return (and lazily create) the set of strong task references on app.state."""
+    if not hasattr(app.state, "_background_tasks"):
+        app.state._background_tasks = set()
+    return app.state._background_tasks
 
 @router.get("/test-cookies")
 async def test_cookies(request: Request):
