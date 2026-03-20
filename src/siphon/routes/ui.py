@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Form, Request, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from siphon.config import FeedConfig, resolve_feed
@@ -21,7 +21,6 @@ templates = Jinja2Templates(
 
 
 def _flash(request: Request, text: str, msg_type: str = "info") -> None:
-    """Append a flash message to the request state."""
     if not hasattr(request.state, "messages"):
         request.state.messages = []
     request.state.messages.append({"text": text, "type": msg_type})
@@ -32,7 +31,6 @@ def _get_messages(request: Request) -> list[dict]:
 
 
 def _slugify(name: str) -> str:
-    """Convert a name to a URL-safe slug."""
     s = name.lower().strip()
     s = re.sub(r"[^\w\s-]", "", s)
     s = re.sub(r"[\s_]+", "-", s)
@@ -40,7 +38,6 @@ def _slugify(name: str) -> str:
 
 
 def _get_feed_display(request: Request) -> list[dict]:
-    """Build feed display data by merging config + DB info."""
     config = request.app.state.config
     db = request.app.state.db
 
@@ -84,7 +81,6 @@ def _get_feed_display(request: Request) -> list[dict]:
 @router.get("/test-cookies")
 async def test_cookies_ui(request: Request):
     import asyncio
-    from fastapi.responses import JSONResponse
     from siphon.downloader import test_youtube_cookies
 
     config = request.app.state.config
@@ -120,6 +116,22 @@ async def feeds_page(request: Request):
 
 
 # ------------------------------------------------------------------ #
+# Check feeds now
+# ------------------------------------------------------------------ #
+
+@router.post("/check-now")
+async def check_now(request: Request):
+    import asyncio
+    from siphon.pipeline import check_feeds
+
+    config = request.app.state.config
+    db = request.app.state.db
+    asyncio.create_task(check_feeds(config, db))
+
+    return RedirectResponse("/ui/", status_code=303)
+
+
+# ------------------------------------------------------------------ #
 # Add feed
 # ------------------------------------------------------------------ #
 
@@ -143,11 +155,17 @@ async def add_feed_submit(
     quality: str = Form(""),
     llm_trim: str = Form(""),
     date_cutoff: str = Form(""),
+    sponsorblock_delay_minutes: str = Form(""),
     title_exclude: str = Form(""),
     claude_prompt_extra: str = Form(""),
 ):
     config = request.app.state.config
     db = request.app.state.db
+
+    # Sanitize name
+    name = _slugify(name) if name else _slugify(url.split("/")[-1])
+    if not name:
+        name = f"feed-{len(config.feeds)}"
 
     # Check for duplicate name
     for fc in config.feeds:
@@ -160,7 +178,6 @@ async def add_feed_submit(
                 "messages": _get_messages(request),
             })
 
-    # Build feed config dict
     feed_data: dict = {"name": name, "url": url, "type": type}
     if mode:
         feed_data["mode"] = mode
@@ -170,12 +187,13 @@ async def add_feed_submit(
         feed_data["llm_trim"] = llm_trim == "true"
     if date_cutoff:
         feed_data["date_cutoff"] = date_cutoff
+    if sponsorblock_delay_minutes:
+        feed_data["sponsorblock_delay_minutes"] = int(sponsorblock_delay_minutes)
     if title_exclude:
         feed_data["title_exclude"] = [t.strip() for t in title_exclude.split(",") if t.strip()]
     if claude_prompt_extra:
         feed_data["claude_prompt_extra"] = claude_prompt_extra
 
-    # Add to config and DB
     new_feed = FeedConfig(**feed_data)
     config.feeds.append(new_feed)
     db.upsert_feed(name, url, type)
@@ -186,13 +204,15 @@ async def add_feed_submit(
 
 
 # ------------------------------------------------------------------ #
-# Update feed settings
+# Feed actions — all use POST with feed_name in form body
 # ------------------------------------------------------------------ #
 
-@router.post("/feed/{feed_name}/update")
-async def update_feed(
+@router.post("/feed-action")
+async def feed_action(
     request: Request,
-    feed_name: str,
+    feed_name: str = Form(...),
+    action: str = Form(...),
+    # Update fields
     mode: str = Form("video"),
     quality: str = Form("1440"),
     sponsorblock: str = Form("true"),
@@ -203,9 +223,29 @@ async def update_feed(
     sponsorblock_delay_minutes: int = Form(4320),
     title_exclude: str = Form(""),
     claude_prompt_extra: str = Form(""),
+    new_name: str = Form(""),
 ):
     config = request.app.state.config
+    db = request.app.state.db
 
+    if action == "update":
+        return _do_update(config, feed_name, mode, quality, sponsorblock,
+                          llm_trim, block_shorts, min_duration_seconds,
+                          date_cutoff, sponsorblock_delay_minutes,
+                          title_exclude, claude_prompt_extra)
+    elif action == "rename":
+        return _do_rename(config, db, feed_name, new_name)
+    elif action == "delete":
+        return _do_delete(config, db, feed_name)
+    elif action == "catchup":
+        return _do_catchup(config, db, feed_name)
+    else:
+        return RedirectResponse("/ui/", status_code=303)
+
+
+def _do_update(config, feed_name, mode, quality, sponsorblock, llm_trim,
+               block_shorts, min_duration_seconds, date_cutoff,
+               sponsorblock_delay_minutes, title_exclude, claude_prompt_extra):
     for i, fc in enumerate(config.feeds):
         if fc.name == feed_name:
             update = {
@@ -225,25 +265,59 @@ async def update_feed(
             }
             config.feeds[i] = FeedConfig(**update)
             break
-
     _save_config(config)
-
     return RedirectResponse("/ui/", status_code=303)
 
 
-# ------------------------------------------------------------------ #
-# Delete feed
-# ------------------------------------------------------------------ #
+def _do_rename(config, db, feed_name, new_name):
+    new_name = _slugify(new_name)
+    if not new_name or new_name == feed_name:
+        return RedirectResponse("/ui/", status_code=303)
 
-@router.post("/feed/{feed_name}/delete")
-async def delete_feed(request: Request, feed_name: str):
-    config = request.app.state.config
-    db = request.app.state.db
+    # Check for duplicate
+    if any(fc.name == new_name for fc in config.feeds):
+        return RedirectResponse("/ui/", status_code=303)
 
-    # Remove from config
+    # Update config
+    for i, fc in enumerate(config.feeds):
+        if fc.name == feed_name:
+            data = fc.model_dump()
+            data["name"] = new_name
+            config.feeds[i] = FeedConfig(**data)
+            break
+
+    # Update DB — delete old, insert new
+    old_feed = db.get_feed(feed_name)
+    if old_feed:
+        db.upsert_feed(new_name, old_feed["url"], old_feed.get("feed_type", "youtube"))
+        # Update episodes to point to new feed name
+        db.conn.execute(
+            "UPDATE episodes SET feed_name = ? WHERE feed_name = ?",
+            (new_name, feed_name),
+        )
+        db.conn.commit()
+        db.delete_feed(feed_name)
+
+    # Rename media directory
+    download_dir = config.storage.download_dir
+    old_dir = os.path.join(download_dir, feed_name)
+    new_dir = os.path.join(download_dir, new_name)
+    if os.path.isdir(old_dir) and not os.path.exists(new_dir):
+        os.rename(old_dir, new_dir)
+        # Update file paths in DB
+        db.conn.execute(
+            "UPDATE episodes SET file_path = REPLACE(file_path, ?, ?) WHERE feed_name = ?",
+            (feed_name, new_name, new_name),
+        )
+        db.conn.commit()
+
+    _save_config(config)
+    return RedirectResponse("/ui/", status_code=303)
+
+
+def _do_delete(config, db, feed_name):
     config.feeds = [f for f in config.feeds if f.name != feed_name]
 
-    # Remove files
     download_dir = config.storage.download_dir
     feed_dir = os.path.join(download_dir, feed_name)
     if os.path.isdir(feed_dir):
@@ -257,27 +331,15 @@ async def delete_feed(request: Request, feed_name: str):
         except OSError:
             pass
 
-    # Remove from DB
     db.delete_episodes_by_feed(feed_name)
     db.delete_feed(feed_name)
-
     _save_config(config)
-
     return RedirectResponse("/ui/", status_code=303)
 
 
-# ------------------------------------------------------------------ #
-# Mark as caught up
-# ------------------------------------------------------------------ #
-
-@router.post("/feed/{feed_name}/catchup")
-async def catchup_feed(request: Request, feed_name: str):
-    config = request.app.state.config
-    db = request.app.state.db
-
+def _do_catchup(config, db, feed_name):
     today = datetime.now(timezone.utc).strftime("%Y%m%d")
 
-    # Update feed config date_cutoff
     for i, fc in enumerate(config.feeds):
         if fc.name == feed_name:
             update = fc.model_dump()
@@ -285,7 +347,6 @@ async def catchup_feed(request: Request, feed_name: str):
             config.feeds[i] = FeedConfig(**update)
             break
 
-    # Delete downloaded files
     download_dir = config.storage.download_dir
     feed_dir = os.path.join(download_dir, feed_name)
     if os.path.isdir(feed_dir):
@@ -295,13 +356,11 @@ async def catchup_feed(request: Request, feed_name: str):
             except OSError:
                 pass
 
-    # Update DB: mark all done episodes as pruned
     episodes = db.get_done_episodes_by_feed(feed_name)
     for ep in episodes:
         db.update_episode_status(ep["video_id"], feed_name, "pruned")
 
     _save_config(config)
-
     return RedirectResponse("/ui/", status_code=303)
 
 
@@ -322,7 +381,6 @@ async def import_page(request: Request):
 @router.post("/import")
 async def import_upload(request: Request, opml_file: UploadFile = File(...)):
     content = await opml_file.read()
-
     feeds = _parse_opml(content)
 
     if not feeds:
@@ -334,7 +392,6 @@ async def import_upload(request: Request, opml_file: UploadFile = File(...)):
             "messages": _get_messages(request),
         })
 
-    # Filter out feeds that already exist
     config = request.app.state.config
     existing_urls = {fc.url for fc in config.feeds}
     existing_names = {fc.name for fc in config.feeds}
@@ -342,7 +399,6 @@ async def import_upload(request: Request, opml_file: UploadFile = File(...)):
     new_feeds = []
     for f in feeds:
         if f["url"] not in existing_urls:
-            # Make sure name is unique
             name = f["name"]
             counter = 2
             while name in existing_names:
@@ -387,6 +443,10 @@ async def import_confirm(request: Request):
         if not name or not url:
             continue
 
+        name = _slugify(name)
+        if not name:
+            name = f"podcast-{i}"
+
         date_cutoff = form.get(f"date_cutoff_{i}", "").strip() or None
         llm_trim_str = form.get(f"llm_trim_{i}", "").strip()
         title_exclude_str = form.get(f"title_exclude_{i}", "").strip()
@@ -410,7 +470,6 @@ async def import_confirm(request: Request):
         imported += 1
 
     _save_config(config)
-
     return RedirectResponse(f"/ui/?imported={imported}", status_code=303)
 
 
@@ -419,14 +478,12 @@ async def import_confirm(request: Request):
 # ------------------------------------------------------------------ #
 
 def _parse_opml(content: bytes) -> list[dict]:
-    """Parse an OPML file and extract feed URLs and titles."""
     try:
         root = ET.fromstring(content)
     except ET.ParseError:
         return []
 
     feeds = []
-    # OPML feeds are in <outline> elements, typically with xmlUrl attribute
     for outline in root.iter("outline"):
         xml_url = outline.get("xmlUrl") or outline.get("xmlurl") or outline.get("url")
         if not xml_url:
@@ -447,18 +504,11 @@ def _parse_opml(content: bytes) -> list[dict]:
 
 
 def _save_config(config) -> None:
-    """Save the current config back to YAML.
-
-    This writes to the config file that was originally loaded. If the
-    config was loaded from a non-file source, this is a no-op.
-    """
     import yaml
     from pathlib import Path
 
-    # Build the YAML-serializable dict
     data = config.model_dump()
 
-    # Convert to clean YAML types
     def _clean(obj):
         if isinstance(obj, dict):
             return {k: _clean(v) for k, v in obj.items() if v is not None or k in ("date_cutoff",)}
@@ -468,7 +518,6 @@ def _save_config(config) -> None:
 
     data = _clean(data)
 
-    # Use the path the config was originally loaded from
     config_path = Path(getattr(config, "_config_path", "config.yaml"))
     config_path.write_text(
         yaml.dump(data, default_flow_style=False, sort_keys=False, allow_unicode=True),

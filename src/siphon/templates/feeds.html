@@ -20,6 +20,9 @@
     <div class="stat-value" id="yt-cookie-icon">?</div>
     <div class="stat-label">YouTube Login</div>
   </div>
+  <form method="post" action="/ui/check-now" style="display:flex; align-items:center;">
+    <button type="submit" class="btn btn-small">Check Feeds Now</button>
+  </form>
 </div>
 
 <script>
@@ -65,8 +68,10 @@ testCookies();
     <div style="display:flex; gap:8px;">
       <a href="/feed/{{ feed.name }}" class="btn btn-secondary btn-small" target="_blank">RSS</a>
       <button class="btn btn-small" onclick="toggleEdit('{{ feed.name }}')">Edit</button>
-      <form method="post" action="/ui/feed/{{ feed.name }}/catchup" style="display:inline;"
+      <form method="post" action="/ui/feed-action" style="display:inline;"
             onsubmit="return confirm('Mark {{ feed.name }} as caught up? This deletes all downloaded files and sets date_cutoff to today.')">
+        <input type="hidden" name="feed_name" value="{{ feed.name }}">
+        <input type="hidden" name="action" value="catchup">
         <button type="submit" class="btn btn-danger btn-small">Mark Caught Up</button>
       </form>
     </div>
@@ -81,7 +86,9 @@ testCookies();
   </div>
 
   <div id="edit-{{ feed.name }}" class="hidden" style="margin-top:12px; padding-top:12px; border-top:1px solid #333;">
-    <form method="post" action="/ui/feed/{{ feed.name }}/update">
+    <form method="post" action="/ui/feed-action">
+      <input type="hidden" name="feed_name" value="{{ feed.name }}">
+      <input type="hidden" name="action" value="update">
       <div class="form-row">
         <div class="form-group">
           <label>Mode</label>
@@ -140,12 +147,23 @@ testCookies();
       </div>
       <div style="display:flex; gap:8px; margin-top:8px;">
         <button type="submit" class="btn btn-small">Save</button>
-        <form method="post" action="/ui/feed/{{ feed.name }}/delete" style="display:inline;"
-              onsubmit="return confirm('Delete feed {{ feed.name }}? This removes all episodes and files.')">
-          <button type="submit" class="btn btn-danger btn-small">Delete Feed</button>
-        </form>
       </div>
     </form>
+
+    <div style="display:flex; gap:8px; margin-top:12px; padding-top:8px; border-top:1px solid #333;">
+      <form method="post" action="/ui/feed-action" style="display:flex; gap:8px; align-items:center;">
+        <input type="hidden" name="feed_name" value="{{ feed.name }}">
+        <input type="hidden" name="action" value="rename">
+        <input type="text" name="new_name" placeholder="New name" style="width:150px;" class="btn-small">
+        <button type="submit" class="btn btn-secondary btn-small">Rename</button>
+      </form>
+      <form method="post" action="/ui/feed-action" style="display:inline;"
+            onsubmit="return confirm('Delete feed {{ feed.name }}? This removes all episodes and files.')">
+        <input type="hidden" name="feed_name" value="{{ feed.name }}">
+        <input type="hidden" name="action" value="delete">
+        <button type="submit" class="btn btn-danger btn-small">Delete Feed</button>
+      </form>
+    </div>
   </div>
 </div>
 {% endfor %}

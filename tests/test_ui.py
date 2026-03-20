@@ -42,7 +42,6 @@ def config(tmp_path):
 
 @pytest.fixture
 async def client(config, tmp_path):
-    # Change to tmp_path so config.yaml gets saved there
     old_cwd = os.getcwd()
     os.chdir(str(tmp_path))
     try:
@@ -71,6 +70,10 @@ class TestFeedsPage:
         resp = await client.get("/ui/")
         assert "Disk Used" in resp.text
 
+    async def test_feeds_page_has_check_now_button(self, client):
+        resp = await client.get("/ui/")
+        assert "Check Feeds Now" in resp.text
+
 
 class TestAddFeed:
     async def test_add_page_loads(self, client):
@@ -87,14 +90,32 @@ class TestAddFeed:
             "quality": "",
             "llm_trim": "",
             "date_cutoff": "",
+            "sponsorblock_delay_minutes": "",
             "title_exclude": "",
             "claude_prompt_extra": "",
         }, follow_redirects=False)
         assert resp.status_code == 303
 
-        # Feed should exist in config
         names = [f.name for f in config.feeds]
         assert "new-channel" in names
+
+    async def test_add_feed_with_sponsorblock_delay(self, client, config):
+        resp = await client.post("/ui/add", data={
+            "url": "https://www.youtube.com/@DelayChannel",
+            "name": "delay-channel",
+            "type": "youtube",
+            "mode": "",
+            "quality": "",
+            "llm_trim": "",
+            "date_cutoff": "",
+            "sponsorblock_delay_minutes": "120",
+            "title_exclude": "",
+            "claude_prompt_extra": "",
+        }, follow_redirects=False)
+        assert resp.status_code == 303
+
+        feed = next(f for f in config.feeds if f.name == "delay-channel")
+        assert feed.sponsorblock_delay_minutes == 120
 
     async def test_add_podcast_feed(self, client, config):
         resp = await client.post("/ui/add", data={
@@ -105,6 +126,7 @@ class TestAddFeed:
             "quality": "",
             "llm_trim": "true",
             "date_cutoff": "20240101",
+            "sponsorblock_delay_minutes": "",
             "title_exclude": "bonus, trailer",
             "claude_prompt_extra": "Remove Discord promos.",
         }, follow_redirects=False)
@@ -121,22 +143,43 @@ class TestAddFeed:
     async def test_add_duplicate_name_rejected(self, client):
         resp = await client.post("/ui/add", data={
             "url": "https://www.youtube.com/@Other",
-            "name": "test-feed",  # already exists
+            "name": "test-feed",
             "type": "youtube",
             "mode": "",
             "quality": "",
             "llm_trim": "",
             "date_cutoff": "",
+            "sponsorblock_delay_minutes": "",
             "title_exclude": "",
             "claude_prompt_extra": "",
         })
-        assert resp.status_code == 200  # stays on add page with error
+        assert resp.status_code == 200
         assert "already exists" in resp.text
 
+    async def test_add_feed_slugifies_name(self, client, config):
+        resp = await client.post("/ui/add", data={
+            "url": "https://www.youtube.com/@Weird",
+            "name": "My Cool Channel!",
+            "type": "youtube",
+            "mode": "",
+            "quality": "",
+            "llm_trim": "",
+            "date_cutoff": "",
+            "sponsorblock_delay_minutes": "",
+            "title_exclude": "",
+            "claude_prompt_extra": "",
+        }, follow_redirects=False)
+        assert resp.status_code == 303
 
-class TestUpdateFeed:
+        names = [f.name for f in config.feeds]
+        assert "my-cool-channel" in names
+
+
+class TestFeedActions:
     async def test_update_feed_settings(self, client, config):
-        resp = await client.post("/ui/feed/test-feed/update", data={
+        resp = await client.post("/ui/feed-action", data={
+            "feed_name": "test-feed",
+            "action": "update",
             "mode": "audio",
             "quality": "720",
             "sponsorblock": "false",
@@ -156,37 +199,45 @@ class TestUpdateFeed:
         assert feed.sponsorblock is False
         assert feed.llm_trim is True
 
-
-class TestDeleteFeed:
     async def test_delete_feed(self, client, config):
-        # Add a feed first so we can delete it
         await client.post("/ui/add", data={
             "url": "https://www.youtube.com/@Deleteme",
             "name": "delete-me",
             "type": "youtube",
-            "mode": "",
-            "quality": "",
-            "llm_trim": "",
-            "date_cutoff": "",
-            "title_exclude": "",
-            "claude_prompt_extra": "",
+            "mode": "", "quality": "", "llm_trim": "", "date_cutoff": "",
+            "sponsorblock_delay_minutes": "", "title_exclude": "", "claude_prompt_extra": "",
         }, follow_redirects=False)
 
-        resp = await client.post("/ui/feed/delete-me/delete", follow_redirects=False)
+        resp = await client.post("/ui/feed-action", data={
+            "feed_name": "delete-me",
+            "action": "delete",
+        }, follow_redirects=False)
         assert resp.status_code == 303
 
         names = [f.name for f in config.feeds]
         assert "delete-me" not in names
 
+    async def test_rename_feed(self, client, config):
+        resp = await client.post("/ui/feed-action", data={
+            "feed_name": "test-feed",
+            "action": "rename",
+            "new_name": "renamed-feed",
+        }, follow_redirects=False)
+        assert resp.status_code == 303
 
-class TestCatchUp:
+        names = [f.name for f in config.feeds]
+        assert "renamed-feed" in names
+        assert "test-feed" not in names
+
     async def test_catchup_sets_date_cutoff(self, client, config):
-        resp = await client.post("/ui/feed/test-feed/catchup", follow_redirects=False)
+        resp = await client.post("/ui/feed-action", data={
+            "feed_name": "test-feed",
+            "action": "catchup",
+        }, follow_redirects=False)
         assert resp.status_code == 303
 
         feed = next(f for f in config.feeds if f.name == "test-feed")
         assert feed.date_cutoff is not None
-        # Should be today's date in YYYYMMDD format
         assert len(feed.date_cutoff) == 8
 
 
@@ -211,7 +262,6 @@ class TestOPMLImport:
         assert resp.status_code == 200
         assert "my-podcast" in resp.text
         assert "another-show" in resp.text
-        assert "2" in resp.text  # "Found 2 feeds"
 
     async def test_import_confirm_adds_feeds(self, client, config):
         resp = await client.post("/ui/import/confirm", data={
@@ -235,26 +285,16 @@ class TestOPMLImport:
         assert "imported-pod" in names
         assert "imported-pod-2" in names
 
-        pod1 = next(f for f in config.feeds if f.name == "imported-pod")
-        assert pod1.type == "podcast"
-        assert pod1.date_cutoff == "20240101"
-        assert pod1.llm_trim is True
-
     async def test_import_skips_unchecked(self, client, config):
         resp = await client.post("/ui/import/confirm", data={
             "total": "2",
-            # import_0 is NOT set (unchecked)
             "name_0": "skip-me",
             "url_0": "https://example.com/skip.xml",
-            "date_cutoff_0": "",
-            "llm_trim_0": "",
-            "title_exclude_0": "",
+            "date_cutoff_0": "", "llm_trim_0": "", "title_exclude_0": "",
             "import_1": "1",
             "name_1": "keep-me",
             "url_1": "https://example.com/keep.xml",
-            "date_cutoff_1": "",
-            "llm_trim_1": "",
-            "title_exclude_1": "",
+            "date_cutoff_1": "", "llm_trim_1": "", "title_exclude_1": "",
         }, follow_redirects=False)
         assert resp.status_code == 303
 

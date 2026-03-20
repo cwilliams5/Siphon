@@ -21,8 +21,8 @@
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Name (slug)</label>
-        <input type="text" name="name" placeholder="my-channel" value="{{ prefill.name or '' }}" required>
+        <label>Name</label>
+        <input type="text" name="name" placeholder="my-channel (lowercase, dashes ok)" value="{{ prefill.name or '' }}" required>
       </div>
       <div class="form-group">
         <label>Mode</label>
@@ -47,13 +47,17 @@
         </select>
       </div>
       <div class="form-group">
+        <label>SponsorBlock Delay (min)</label>
+        <input type="number" name="sponsorblock_delay_minutes" placeholder="Default: 4320 (3 days)" value="{{ prefill.sponsorblock_delay_minutes or '' }}">
+      </div>
+      <div class="form-group">
         <label>Date Cutoff</label>
         <input type="text" name="date_cutoff" placeholder="YYYYMMDD" value="{{ prefill.date_cutoff or '' }}">
       </div>
-      <div class="form-group">
-        <label>Title Exclude</label>
-        <input type="text" name="title_exclude" placeholder="comma,separated" value="{{ prefill.title_exclude or '' }}">
-      </div>
+    </div>
+    <div class="form-group">
+      <label>Title Exclude (comma-separated)</label>
+      <input type="text" name="title_exclude" placeholder="live, #shorts, community" style="width:100%;" value="{{ prefill.title_exclude or '' }}">
     </div>
     <div class="form-group">
       <label>Claude Prompt Extra</label>
