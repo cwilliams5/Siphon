@@ -97,6 +97,7 @@ testCookies();
           <label>Display Name</label>
           <input type="text" name="display_name" value="{{ feed.display_name or '' }}" placeholder="Human-readable name">
         </div>
+        {% if feed.feed_type == 'youtube' %}
         <div class="form-group">
           <label>Mode</label>
           <select name="mode">
@@ -108,6 +109,20 @@ testCookies();
           <label>Quality</label>
           <input type="text" name="quality" value="{{ feed.quality }}" placeholder="1440 or max">
         </div>
+        {% else %}
+        <input type="hidden" name="mode" value="{{ feed.mode }}">
+        <input type="hidden" name="quality" value="{{ feed.quality }}">
+        {% endif %}
+        <div class="form-group">
+          <label>LLM Trim</label>
+          <select name="llm_trim">
+            <option value="true" {% if feed.llm_trim %}selected{% endif %}>On</option>
+            <option value="false" {% if not feed.llm_trim %}selected{% endif %}>Off</option>
+          </select>
+        </div>
+      </div>
+      {% if feed.feed_type == 'youtube' %}
+      <div class="form-row">
         <div class="form-group">
           <label>SponsorBlock</label>
           <select name="sponsorblock">
@@ -115,8 +130,6 @@ testCookies();
             <option value="false" {% if not feed.sponsorblock %}selected{% endif %}>Off</option>
           </select>
         </div>
-      </div>
-      <div class="form-row">
         <div class="form-group">
           <label>SponsorBlock Categories</label>
           <input type="text" name="sponsorblock_categories" value="{{ feed.sponsorblock_categories | join(', ') }}" placeholder="sponsor, selfpromo, interaction">
@@ -141,6 +154,14 @@ testCookies();
             <option value="false" {% if not feed.block_shorts %}selected{% endif %}>Off</option>
           </select>
         </div>
+      {% else %}
+      <input type="hidden" name="sponsorblock" value="{{ feed.sponsorblock }}">
+      <input type="hidden" name="sponsorblock_categories" value="{{ feed.sponsorblock_categories | join(', ') }}">
+      <input type="hidden" name="sponsorblock_delay_minutes" value="{{ feed.sponsorblock_delay_minutes }}">
+      <input type="hidden" name="force_keyframes_at_cuts" value="{{ feed.force_keyframes_at_cuts }}">
+      <input type="hidden" name="block_shorts" value="{{ feed.block_shorts }}">
+      <div class="form-row">
+      {% endif %}
         <div class="form-group">
           <label>Min Duration (sec)</label>
           <input type="number" name="min_duration_seconds" value="{{ feed.min_duration_seconds }}">
@@ -148,13 +169,6 @@ testCookies();
         <div class="form-group">
           <label>Date Cutoff (YYYYMMDD)</label>
           <input type="text" name="date_cutoff" value="{{ feed.date_cutoff or '' }}" placeholder="e.g. 20240101">
-        </div>
-        <div class="form-group">
-          <label>LLM Trim</label>
-          <select name="llm_trim">
-            <option value="true" {% if feed.llm_trim %}selected{% endif %}>On</option>
-            <option value="false" {% if not feed.llm_trim %}selected{% endif %}>Off</option>
-          </select>
         </div>
       </div>
       <div class="form-group">
