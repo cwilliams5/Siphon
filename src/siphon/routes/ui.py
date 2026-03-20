@@ -122,13 +122,42 @@ async def feeds_page(request: Request):
 @router.post("/check-now")
 async def check_now(request: Request):
     import asyncio
+    import logging
     from siphon.pipeline import check_feeds
 
+    logger = logging.getLogger(__name__)
+
+    # Reload config from disk so any changes made via the UI are picked up
+    _reload_config(request.app)
     config = request.app.state.config
     db = request.app.state.db
+
+    logger.info("Manual feed check triggered: %d feeds", len(config.feeds))
     asyncio.create_task(check_feeds(config, db))
 
     return RedirectResponse("/ui/", status_code=303)
+
+
+def _reload_config(app) -> None:
+    """Reload config from disk into app.state so new/renamed feeds are picked up."""
+    import logging
+    from siphon.config import load_config
+
+    logger = logging.getLogger(__name__)
+    config = app.state.config
+    config_path = getattr(config, "_config_path", None)
+    if not config_path:
+        return
+    try:
+        new_config = load_config(config_path)
+        app.state.config = new_config
+        # Sync any new feeds to DB
+        db = app.state.db
+        for feed in new_config.feeds:
+            db.upsert_feed(feed.name, feed.url, feed.type)
+        logger.info("Config reloaded: %d feeds", len(new_config.feeds))
+    except Exception as e:
+        logger.error("Config reload failed: %s", e)
 
 
 # ------------------------------------------------------------------ #
