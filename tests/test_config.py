@@ -54,7 +54,8 @@ class TestLoadConfig:
     def test_schedule_fields(self):
         cfg = load_config(str(SAMPLE_CONFIG))
         assert cfg.schedule.check_interval_minutes == 30
-        assert cfg.schedule.feeds_per_check == 5
+        assert cfg.schedule.youtube_feeds_per_check == 5
+        assert cfg.schedule.podcast_feeds_per_check == 15
         assert cfg.schedule.youtube_download_workers == 1
         assert cfg.schedule.youtube_download_delay_seconds == 120
         assert cfg.schedule.youtube_max_downloads_per_hour == 10

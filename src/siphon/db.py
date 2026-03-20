@@ -107,11 +107,20 @@ class Database:
         rows = self.conn.execute("SELECT * FROM feeds").fetchall()
         return [dict(r) for r in rows]
 
-    def get_feeds_to_check(self, limit: int) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT * FROM feeds ORDER BY last_checked_at ASC NULLS FIRST LIMIT ?",
-            (limit,),
-        ).fetchall()
+    def get_feeds_to_check(
+        self, limit: int, feed_type: str | None = None
+    ) -> list[dict]:
+        if feed_type is not None:
+            rows = self.conn.execute(
+                "SELECT * FROM feeds WHERE feed_type = ? "
+                "ORDER BY last_checked_at ASC NULLS FIRST LIMIT ?",
+                (feed_type, limit),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM feeds ORDER BY last_checked_at ASC NULLS FIRST LIMIT ?",
+                (limit,),
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def update_feed_checked(self, name: str, error: str | None = None) -> None:

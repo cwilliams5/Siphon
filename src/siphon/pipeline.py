@@ -32,35 +32,39 @@ logger = logging.getLogger(__name__)
 async def check_feeds(config: SiphonConfig, db: Database) -> None:
     """Discover new episodes from the next batch of feeds."""
 
-    feeds_to_check = db.get_feeds_to_check(config.schedule.feeds_per_check)
+    for feed_type, limit in (
+        ("youtube", config.schedule.youtube_feeds_per_check),
+        ("podcast", config.schedule.podcast_feeds_per_check),
+    ):
+        feeds_to_check = db.get_feeds_to_check(limit, feed_type=feed_type)
 
-    for feed_idx, feed_db in enumerate(feeds_to_check):
-        if feed_idx > 0:
-            await asyncio.sleep(5)
+        for feed_idx, feed_db in enumerate(feeds_to_check):
+            if feed_idx > 0:
+                await asyncio.sleep(5 if feed_type == "youtube" else 1)
 
-        feed_config = None
-        for fc in config.feeds:
-            if fc.name == feed_db["name"]:
-                feed_config = fc
-                break
+            feed_config = None
+            for fc in config.feeds:
+                if fc.name == feed_db["name"]:
+                    feed_config = fc
+                    break
 
-        if feed_config is None:
-            logger.warning("Feed %r not found in config, skipping", feed_db["name"])
-            continue
+            if feed_config is None:
+                logger.warning("Feed %r not found in config, skipping", feed_db["name"])
+                continue
 
-        resolved = resolve_feed(feed_config, config.defaults)
+            resolved = resolve_feed(feed_config, config.defaults)
 
-        try:
-            if resolved.type == "podcast":
-                await _check_podcast_feed(resolved, db)
-            else:
-                await _check_youtube_feed(resolved, config, db)
+            try:
+                if resolved.type == "podcast":
+                    await _check_podcast_feed(resolved, db)
+                else:
+                    await _check_youtube_feed(resolved, config, db)
 
-            db.update_feed_checked(feed_db["name"])
+                db.update_feed_checked(feed_db["name"])
 
-        except Exception as exc:
-            logger.error("Error checking feed %s: %s", feed_db["name"], exc)
-            db.update_feed_checked(feed_db["name"], error=str(exc))
+            except Exception as exc:
+                logger.error("Error checking feed %s: %s", feed_db["name"], exc)
+                db.update_feed_checked(feed_db["name"], error=str(exc))
 
 
 async def _check_youtube_feed(resolved, config, db) -> None:

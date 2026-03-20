@@ -16,7 +16,8 @@ storage:
 
 schedule:
   check_interval_minutes: 30
-  feeds_per_check: 10
+  youtube_feeds_per_check: 10
+  podcast_feeds_per_check: 30
 
   # YouTube — gentle on a single platform
   youtube_download_interval_minutes: 5

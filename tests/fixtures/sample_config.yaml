@@ -16,7 +16,8 @@ storage:
 
 schedule:
   check_interval_minutes: 30
-  feeds_per_check: 5
+  youtube_feeds_per_check: 5
+  podcast_feeds_per_check: 15
   youtube_download_interval_minutes: 5
   youtube_download_workers: 1
   youtube_download_delay_seconds: 120

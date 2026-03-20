@@ -58,7 +58,8 @@ def config(download_dir):
             podcast_keep_per_feed=200,
         ),
         schedule=ScheduleConfig(
-            feeds_per_check=10,
+            youtube_feeds_per_check=10,
+            podcast_feeds_per_check=30,
             youtube_download_workers=2,
             youtube_download_delay_seconds=0,
             youtube_max_downloads_per_hour=100,

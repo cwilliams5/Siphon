@@ -64,7 +64,8 @@ class StorageConfig(BaseModel):
 
 class ScheduleConfig(BaseModel):
     check_interval_minutes: int = 30
-    feeds_per_check: int = 10
+    youtube_feeds_per_check: int = 10
+    podcast_feeds_per_check: int = 30
 
     # YouTube — gentle on a single platform
     youtube_download_interval_minutes: int = 5
