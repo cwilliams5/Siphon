@@ -21,6 +21,11 @@ def main():
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         help="Logging level (default: INFO)",
     )
+    parser.add_argument(
+        "--no-tray",
+        action="store_true",
+        help="Disable system tray icon",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -47,6 +52,16 @@ def main():
             logging.info("Set process to below-normal priority")
     except Exception:
         pass
+
+    # Start system tray icon (background thread)
+    if not args.no_tray:
+        try:
+            from siphon.tray import SiphonTray
+            tray = SiphonTray(port=config.server.port, host="127.0.0.1")
+            tray.run_in_background()
+            logging.info("System tray icon started")
+        except Exception as e:
+            logging.warning(f"System tray failed to start: {e}")
 
     from siphon.app import create_app
     app = create_app(config)
