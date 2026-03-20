@@ -154,6 +154,9 @@ class FeedConfig(BaseModel):
     claude_prompt_extra: Optional[str] = None
     claude_prompt_override: Optional[str] = None
 
+    # Display name for RSS/UI (not in FeedDefaults)
+    display_name: Optional[str] = None
+
     @field_validator("quality", mode="before")
     @classmethod
     def _validate_quality(cls, v: object) -> Quality | None:
@@ -191,6 +194,9 @@ class ResolvedFeed(BaseModel):
     claude_prompt_extra: str | None = None
     claude_prompt_override: str | None = None
 
+    # Display name for RSS/UI (no default fallback)
+    display_name: str | None = None
+
 
 class SiphonConfig(BaseModel):
     server: ServerConfig
@@ -219,6 +225,7 @@ def resolve_feed(feed: FeedConfig, defaults: FeedDefaults) -> ResolvedFeed:
     # Per-feed-only fields (not in FeedDefaults)
     merged["claude_prompt_extra"] = feed.claude_prompt_extra
     merged["claude_prompt_override"] = feed.claude_prompt_override
+    merged["display_name"] = feed.display_name
     return ResolvedFeed(**merged)
 
 

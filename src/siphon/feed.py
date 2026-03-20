@@ -74,6 +74,9 @@ def generate_feed_xml(
     episodes: list[dict],
     base_url: str,
     channel_name: str | None = None,
+    *,
+    display_name: str | None = None,
+    image_url: str | None = None,
 ) -> str:
     """Return an RSS 2.0 XML string with iTunes extensions.
 
@@ -91,32 +94,42 @@ def generate_feed_xml(
     channel_name:
         Optional display name.  Falls back to the first episode's
         ``channel_name`` if available, then *feed_name*.
+    display_name:
+        Explicit display name from config (takes highest priority for title).
+    image_url:
+        Channel-level artwork URL (e.g. from podcast RSS).
     """
 
-    # Resolve display name
-    if channel_name is None and episodes:
-        channel_name = episodes[0].get("channel_name") or feed_name
-    if channel_name is None:
-        channel_name = feed_name
+    # Resolve display name: display_name > channel_name > first episode > feed_name
+    title = display_name
+    if title is None:
+        title = channel_name
+    if title is None and episodes:
+        title = episodes[0].get("channel_name") or feed_name
+    if title is None:
+        title = feed_name
 
     # Build the tree – register_namespace already handles the xmlns declaration
     rss = ET.Element("rss", version="2.0")
 
     channel = ET.SubElement(rss, "channel")
 
-    _text(channel, "title", channel_name)
+    _text(channel, "title", title)
     _text(channel, "link", base_url)
     _text(channel, "description", f"Siphon feed: {feed_name}")
     _text(channel, "language", "en")
-    _text(channel, f"{{{ITUNES_NS}}}author", channel_name)
+    _text(channel, f"{{{ITUNES_NS}}}author", title)
     _text(channel, f"{{{ITUNES_NS}}}explicit", "false")
 
-    # Channel-level artwork from first episode
-    if episodes and episodes[0].get("thumbnail_url"):
+    # Channel-level artwork: explicit image_url > first episode thumbnail
+    artwork_url = image_url
+    if not artwork_url and episodes and episodes[0].get("thumbnail_url"):
+        artwork_url = episodes[0]["thumbnail_url"]
+    if artwork_url:
         ET.SubElement(
             channel,
             f"{{{ITUNES_NS}}}image",
-            href=episodes[0]["thumbnail_url"],
+            href=artwork_url,
         )
 
     # Episodes (already ordered by upload_date DESC from the DB)

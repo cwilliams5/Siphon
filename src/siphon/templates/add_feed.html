@@ -21,8 +21,12 @@
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Name</label>
+        <label>Name (slug)</label>
         <input type="text" name="name" placeholder="my-channel (lowercase, dashes ok)" value="{{ prefill.name or '' }}" required>
+      </div>
+      <div class="form-group">
+        <label>Display Name</label>
+        <input type="text" name="display_name" placeholder="Human-readable name" value="{{ prefill.display_name or '' }}">
       </div>
       <div class="form-group">
         <label>Mode</label>
@@ -39,20 +43,56 @@
     </div>
     <div class="form-row">
       <div class="form-group">
+        <label>SponsorBlock</label>
+        <select name="sponsorblock">
+          <option value="" {% if not prefill.sponsorblock %}selected{% endif %}>Default</option>
+          <option value="true" {% if prefill.sponsorblock == 'true' %}selected{% endif %}>On</option>
+          <option value="false" {% if prefill.sponsorblock == 'false' %}selected{% endif %}>Off</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>SponsorBlock Categories</label>
+        <input type="text" name="sponsorblock_categories" placeholder="sponsor, selfpromo, interaction" value="{{ prefill.sponsorblock_categories or '' }}">
+      </div>
+      <div class="form-group">
+        <label>SponsorBlock Delay (min)</label>
+        <input type="number" name="sponsorblock_delay_minutes" placeholder="Default: 4320 (3 days)" value="{{ prefill.sponsorblock_delay_minutes or '' }}">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Force Keyframes at Cuts</label>
+        <select name="force_keyframes_at_cuts">
+          <option value="" {% if not prefill.force_keyframes_at_cuts %}selected{% endif %}>Default</option>
+          <option value="true" {% if prefill.force_keyframes_at_cuts == 'true' %}selected{% endif %}>On</option>
+          <option value="false" {% if prefill.force_keyframes_at_cuts == 'false' %}selected{% endif %}>Off</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Block Shorts</label>
+        <select name="block_shorts">
+          <option value="" {% if not prefill.block_shorts %}selected{% endif %}>Default</option>
+          <option value="true" {% if prefill.block_shorts == 'true' %}selected{% endif %}>On</option>
+          <option value="false" {% if prefill.block_shorts == 'false' %}selected{% endif %}>Off</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Min Duration (sec)</label>
+        <input type="number" name="min_duration_seconds" placeholder="Default: 60" value="{{ prefill.min_duration_seconds or '' }}">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Date Cutoff</label>
+        <input type="text" name="date_cutoff" placeholder="YYYYMMDD" value="{{ prefill.date_cutoff or '' }}">
+      </div>
+      <div class="form-group">
         <label>LLM Trim</label>
         <select name="llm_trim">
           <option value="" {% if not prefill.llm_trim %}selected{% endif %}>Default</option>
           <option value="true" {% if prefill.llm_trim == 'true' %}selected{% endif %}>On</option>
           <option value="false" {% if prefill.llm_trim == 'false' %}selected{% endif %}>Off</option>
         </select>
-      </div>
-      <div class="form-group">
-        <label>SponsorBlock Delay (min)</label>
-        <input type="number" name="sponsorblock_delay_minutes" placeholder="Default: 4320 (3 days)" value="{{ prefill.sponsorblock_delay_minutes or '' }}">
-      </div>
-      <div class="form-group">
-        <label>Date Cutoff</label>
-        <input type="text" name="date_cutoff" placeholder="YYYYMMDD" value="{{ prefill.date_cutoff or '' }}">
       </div>
     </div>
     <div class="form-group">
@@ -62,6 +102,10 @@
     <div class="form-group">
       <label>Claude Prompt Extra</label>
       <textarea name="claude_prompt_extra" rows="2" placeholder="Additional instructions for ad detection...">{{ prefill.claude_prompt_extra or '' }}</textarea>
+    </div>
+    <div class="form-group">
+      <label>Claude Prompt Override</label>
+      <textarea name="claude_prompt_override" rows="2" placeholder="Complete replacement for the default ad detection prompt...">{{ prefill.claude_prompt_override or '' }}</textarea>
     </div>
     <button type="submit">Add Feed</button>
   </form>

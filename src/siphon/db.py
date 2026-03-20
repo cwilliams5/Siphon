@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS feeds (
     feed_type       TEXT NOT NULL DEFAULT 'youtube',
     last_checked_at TEXT,
     last_error      TEXT,
+    image_url       TEXT,
     created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -51,6 +52,8 @@ MIGRATIONS = [
     "ALTER TABLE episodes ADD COLUMN llm_trim_status TEXT",
     "ALTER TABLE episodes ADD COLUMN llm_segments_json TEXT",
     "ALTER TABLE episodes ADD COLUMN llm_cuts_applied INTEGER",
+    # Add image_url column for podcast artwork
+    "ALTER TABLE feeds ADD COLUMN image_url TEXT",
 ]
 
 
@@ -90,11 +93,23 @@ class Database:
     # Feed CRUD
     # ------------------------------------------------------------------
 
-    def upsert_feed(self, name: str, url: str, feed_type: str = "youtube") -> None:
+    def upsert_feed(
+        self, name: str, url: str, feed_type: str = "youtube", image_url: str | None = None
+    ) -> None:
         self.conn.execute(
-            """INSERT INTO feeds (name, url, feed_type) VALUES (?, ?, ?)
-               ON CONFLICT(name) DO UPDATE SET url = excluded.url, feed_type = excluded.feed_type""",
-            (name, url, feed_type),
+            """INSERT INTO feeds (name, url, feed_type, image_url) VALUES (?, ?, ?, ?)
+               ON CONFLICT(name) DO UPDATE SET url = excluded.url,
+               feed_type = excluded.feed_type,
+               image_url = COALESCE(excluded.image_url, feeds.image_url)""",
+            (name, url, feed_type, image_url),
+        )
+        self.conn.commit()
+
+    def update_feed_image(self, name: str, image_url: str | None) -> None:
+        """Update a feed's image_url."""
+        self.conn.execute(
+            "UPDATE feeds SET image_url = ? WHERE name = ?",
+            (image_url, name),
         )
         self.conn.commit()
 

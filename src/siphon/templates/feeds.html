@@ -57,7 +57,10 @@ testCookies();
 <div class="card">
   <div class="card-header">
     <div>
-      <strong>{{ feed.name }}</strong>
+      <strong>{{ feed.display_name or feed.name }}</strong>
+      {% if feed.display_name %}
+      <span style="color:#888; font-size:0.85em;">({{ feed.name }})</span>
+      {% endif %}
       <span class="badge {% if feed.feed_type == 'podcast' %}badge-pod{% else %}badge-yt{% endif %}">
         {{ feed.feed_type }}
       </span>
@@ -91,6 +94,10 @@ testCookies();
       <input type="hidden" name="action" value="update">
       <div class="form-row">
         <div class="form-group">
+          <label>Display Name</label>
+          <input type="text" name="display_name" value="{{ feed.display_name or '' }}" placeholder="Human-readable name">
+        </div>
+        <div class="form-group">
           <label>Mode</label>
           <select name="mode">
             <option value="video" {% if feed.mode == 'video' %}selected{% endif %}>Video</option>
@@ -108,11 +115,21 @@ testCookies();
             <option value="false" {% if not feed.sponsorblock %}selected{% endif %}>Off</option>
           </select>
         </div>
+      </div>
+      <div class="form-row">
         <div class="form-group">
-          <label>LLM Trim</label>
-          <select name="llm_trim">
-            <option value="true" {% if feed.llm_trim %}selected{% endif %}>On</option>
-            <option value="false" {% if not feed.llm_trim %}selected{% endif %}>Off</option>
+          <label>SponsorBlock Categories</label>
+          <input type="text" name="sponsorblock_categories" value="{{ feed.sponsorblock_categories | join(', ') }}" placeholder="sponsor, selfpromo, interaction">
+        </div>
+        <div class="form-group">
+          <label>SponsorBlock Delay (min)</label>
+          <input type="number" name="sponsorblock_delay_minutes" value="{{ feed.sponsorblock_delay_minutes }}">
+        </div>
+        <div class="form-group">
+          <label>Force Keyframes at Cuts</label>
+          <select name="force_keyframes_at_cuts">
+            <option value="true" {% if feed.force_keyframes_at_cuts %}selected{% endif %}>On</option>
+            <option value="false" {% if not feed.force_keyframes_at_cuts %}selected{% endif %}>Off</option>
           </select>
         </div>
       </div>
@@ -133,8 +150,11 @@ testCookies();
           <input type="text" name="date_cutoff" value="{{ feed.date_cutoff or '' }}" placeholder="e.g. 20240101">
         </div>
         <div class="form-group">
-          <label>SponsorBlock Delay (min)</label>
-          <input type="number" name="sponsorblock_delay_minutes" value="{{ feed.sponsorblock_delay_minutes }}">
+          <label>LLM Trim</label>
+          <select name="llm_trim">
+            <option value="true" {% if feed.llm_trim %}selected{% endif %}>On</option>
+            <option value="false" {% if not feed.llm_trim %}selected{% endif %}>Off</option>
+          </select>
         </div>
       </div>
       <div class="form-group">
@@ -144,6 +164,10 @@ testCookies();
       <div class="form-group">
         <label>Claude Prompt Extra</label>
         <textarea name="claude_prompt_extra" rows="2">{{ feed.claude_prompt_extra or '' }}</textarea>
+      </div>
+      <div class="form-group">
+        <label>Claude Prompt Override</label>
+        <textarea name="claude_prompt_override" rows="2">{{ feed.claude_prompt_override or '' }}</textarea>
       </div>
       <div style="display:flex; gap:8px; margin-top:8px;">
         <button type="submit" class="btn btn-small">Save</button>

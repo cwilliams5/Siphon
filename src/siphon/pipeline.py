@@ -134,6 +134,11 @@ async def _check_podcast_feed(resolved, db) -> None:
     xml_bytes = await loop.run_in_executor(None, fetch_podcast_rss, resolved.url)
     feed_data = parse_podcast_feed(xml_bytes)
 
+    # Store podcast artwork in DB
+    feed_image_url = feed_data.get("image_url")
+    if feed_image_url:
+        db.update_feed_image(resolved.name, feed_image_url)
+
     episodes = feed_data.get("episodes") or []
     new_count = 0
 

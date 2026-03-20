@@ -66,13 +66,17 @@ def _get_feed_display(request: Request) -> list[dict]:
             "mode": resolved.mode,
             "quality": resolved.quality,
             "sponsorblock": resolved.sponsorblock,
+            "sponsorblock_categories": resolved.sponsorblock_categories,
             "sponsorblock_delay_minutes": resolved.sponsorblock_delay_minutes,
+            "force_keyframes_at_cuts": resolved.force_keyframes_at_cuts,
             "block_shorts": resolved.block_shorts,
             "min_duration_seconds": resolved.min_duration_seconds,
             "date_cutoff": resolved.date_cutoff,
             "title_exclude": resolved.title_exclude,
             "llm_trim": resolved.llm_trim,
             "claude_prompt_extra": resolved.claude_prompt_extra,
+            "claude_prompt_override": resolved.claude_prompt_override,
+            "display_name": resolved.display_name,
             "last_checked_at": db_feed.get("last_checked_at"),
             "last_error": db_feed.get("last_error"),
             "episode_counts": status_counts,
@@ -131,7 +135,7 @@ async def feeds_page(request: Request):
 async def check_now(request: Request):
     import asyncio
     import logging
-    from siphon.pipeline import check_feeds
+    from siphon.pipeline import check_feeds, process_downloads
 
     logger = logging.getLogger(__name__)
 
@@ -145,7 +149,9 @@ async def check_now(request: Request):
     async def _check_with_logging():
         try:
             await check_feeds(config, db)
-            logger.info("Manual feed check completed")
+            logger.info("Manual feed check completed, starting downloads")
+            await process_downloads(config, db)
+            logger.info("Manual download processing completed")
         except Exception as e:
             logger.error("Manual feed check failed: %s", e, exc_info=True)
 
@@ -201,11 +207,18 @@ async def add_feed_submit(
     type: str = Form("youtube"),
     mode: str = Form(""),
     quality: str = Form(""),
+    sponsorblock: str = Form(""),
+    sponsorblock_categories: str = Form(""),
+    sponsorblock_delay_minutes: str = Form(""),
+    force_keyframes_at_cuts: str = Form(""),
+    block_shorts: str = Form(""),
+    min_duration_seconds: str = Form(""),
     llm_trim: str = Form(""),
     date_cutoff: str = Form(""),
-    sponsorblock_delay_minutes: str = Form(""),
     title_exclude: str = Form(""),
     claude_prompt_extra: str = Form(""),
+    claude_prompt_override: str = Form(""),
+    display_name: str = Form(""),
 ):
     config = request.app.state.config
     db = request.app.state.db
@@ -231,16 +244,32 @@ async def add_feed_submit(
         feed_data["mode"] = mode
     if quality:
         feed_data["quality"] = quality if quality == "max" else int(quality)
+    if sponsorblock:
+        feed_data["sponsorblock"] = sponsorblock == "true"
+    if sponsorblock_categories:
+        feed_data["sponsorblock_categories"] = [
+            c.strip() for c in sponsorblock_categories.split(",") if c.strip()
+        ]
+    if sponsorblock_delay_minutes:
+        feed_data["sponsorblock_delay_minutes"] = int(sponsorblock_delay_minutes)
+    if force_keyframes_at_cuts:
+        feed_data["force_keyframes_at_cuts"] = force_keyframes_at_cuts == "true"
+    if block_shorts:
+        feed_data["block_shorts"] = block_shorts == "true"
+    if min_duration_seconds:
+        feed_data["min_duration_seconds"] = int(min_duration_seconds)
     if llm_trim:
         feed_data["llm_trim"] = llm_trim == "true"
     if date_cutoff:
         feed_data["date_cutoff"] = date_cutoff
-    if sponsorblock_delay_minutes:
-        feed_data["sponsorblock_delay_minutes"] = int(sponsorblock_delay_minutes)
     if title_exclude:
         feed_data["title_exclude"] = [t.strip() for t in title_exclude.split(",") if t.strip()]
     if claude_prompt_extra:
         feed_data["claude_prompt_extra"] = claude_prompt_extra
+    if claude_prompt_override:
+        feed_data["claude_prompt_override"] = claude_prompt_override
+    if display_name:
+        feed_data["display_name"] = display_name
 
     new_feed = FeedConfig(**feed_data)
     config.feeds.append(new_feed)
@@ -264,23 +293,30 @@ async def feed_action(
     mode: str = Form("video"),
     quality: str = Form("1440"),
     sponsorblock: str = Form("true"),
-    llm_trim: str = Form("false"),
+    sponsorblock_categories: str = Form(""),
+    sponsorblock_delay_minutes: int = Form(4320),
+    force_keyframes_at_cuts: str = Form("true"),
     block_shorts: str = Form("true"),
     min_duration_seconds: int = Form(60),
+    llm_trim: str = Form("false"),
     date_cutoff: str = Form(""),
-    sponsorblock_delay_minutes: int = Form(4320),
     title_exclude: str = Form(""),
     claude_prompt_extra: str = Form(""),
+    claude_prompt_override: str = Form(""),
+    display_name: str = Form(""),
     new_name: str = Form(""),
 ):
     config = request.app.state.config
     db = request.app.state.db
 
     if action == "update":
-        return _do_update(config, feed_name, mode, quality, sponsorblock,
-                          llm_trim, block_shorts, min_duration_seconds,
-                          date_cutoff, sponsorblock_delay_minutes,
-                          title_exclude, claude_prompt_extra)
+        return _do_update(
+            config, feed_name, mode, quality, sponsorblock,
+            sponsorblock_categories, sponsorblock_delay_minutes,
+            force_keyframes_at_cuts, block_shorts, min_duration_seconds,
+            llm_trim, date_cutoff, title_exclude, claude_prompt_extra,
+            claude_prompt_override, display_name,
+        )
     elif action == "rename":
         return _do_rename(config, db, feed_name, new_name)
     elif action == "delete":
@@ -291,9 +327,11 @@ async def feed_action(
         return RedirectResponse("/ui/", status_code=303)
 
 
-def _do_update(config, feed_name, mode, quality, sponsorblock, llm_trim,
-               block_shorts, min_duration_seconds, date_cutoff,
-               sponsorblock_delay_minutes, title_exclude, claude_prompt_extra):
+def _do_update(config, feed_name, mode, quality, sponsorblock,
+               sponsorblock_categories, sponsorblock_delay_minutes,
+               force_keyframes_at_cuts, block_shorts, min_duration_seconds,
+               llm_trim, date_cutoff, title_exclude, claude_prompt_extra,
+               claude_prompt_override, display_name):
     for i, fc in enumerate(config.feeds):
         if fc.name == feed_name:
             update = {
@@ -303,13 +341,20 @@ def _do_update(config, feed_name, mode, quality, sponsorblock, llm_trim,
                 "mode": mode,
                 "quality": quality if quality == "max" else int(quality),
                 "sponsorblock": sponsorblock == "true",
-                "llm_trim": llm_trim == "true",
+                "sponsorblock_categories": (
+                    [c.strip() for c in sponsorblock_categories.split(",") if c.strip()]
+                    if sponsorblock_categories else []
+                ),
+                "sponsorblock_delay_minutes": sponsorblock_delay_minutes,
+                "force_keyframes_at_cuts": force_keyframes_at_cuts == "true",
                 "block_shorts": block_shorts == "true",
                 "min_duration_seconds": min_duration_seconds,
-                "sponsorblock_delay_minutes": sponsorblock_delay_minutes,
+                "llm_trim": llm_trim == "true",
                 "date_cutoff": date_cutoff if date_cutoff else None,
                 "title_exclude": [t.strip() for t in title_exclude.split(",") if t.strip()],
                 "claude_prompt_extra": claude_prompt_extra if claude_prompt_extra else None,
+                "claude_prompt_override": claude_prompt_override if claude_prompt_override else None,
+                "display_name": display_name if display_name else None,
             }
             config.feeds[i] = FeedConfig(**update)
             break

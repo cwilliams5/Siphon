@@ -381,7 +381,11 @@ class TestCheckNow:
             },
         ]
 
-        with patch("siphon.pipeline.extract_feed_metadata", return_value={"entries": fake_entries}):
+        async def _noop_downloads(*a, **kw):
+            pass
+
+        with patch("siphon.pipeline.extract_feed_metadata", return_value={"entries": fake_entries}), \
+             patch("siphon.pipeline.process_downloads", side_effect=_noop_downloads):
             resp = await client.post("/ui/check-now", follow_redirects=False)
             assert resp.status_code == 303
 
