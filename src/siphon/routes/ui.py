@@ -298,18 +298,21 @@ def _do_rename(config, db, feed_name, new_name):
         db.conn.commit()
         db.delete_feed(feed_name)
 
-    # Rename media directory
+    # Rename media directory (skip if old name is invalid as a path component)
     download_dir = config.storage.download_dir
     old_dir = os.path.join(download_dir, feed_name)
     new_dir = os.path.join(download_dir, new_name)
-    if os.path.isdir(old_dir) and not os.path.exists(new_dir):
-        os.rename(old_dir, new_dir)
-        # Update file paths in DB
-        db.conn.execute(
-            "UPDATE episodes SET file_path = REPLACE(file_path, ?, ?) WHERE feed_name = ?",
-            (feed_name, new_name, new_name),
-        )
-        db.conn.commit()
+    try:
+        if os.path.isdir(old_dir) and not os.path.exists(new_dir):
+            os.rename(old_dir, new_dir)
+            # Update file paths in DB
+            db.conn.execute(
+                "UPDATE episodes SET file_path = REPLACE(file_path, ?, ?) WHERE feed_name = ?",
+                (feed_name, new_name, new_name),
+            )
+            db.conn.commit()
+    except OSError:
+        pass  # Old dir didn't exist or had an invalid name — no files to move
 
     _save_config(config)
     return RedirectResponse("/ui/", status_code=303)
