@@ -95,6 +95,7 @@ async def test_cookies_ui(request: Request):
 
 @router.get("/", response_class=HTMLResponse)
 async def feeds_page(request: Request):
+    _reload_config(request.app)
     config = request.app.state.config
     db = request.app.state.db
 
@@ -133,7 +134,15 @@ async def check_now(request: Request):
     db = request.app.state.db
 
     logger.info("Manual feed check triggered: %d feeds", len(config.feeds))
-    asyncio.create_task(check_feeds(config, db))
+
+    async def _check_with_logging():
+        try:
+            await check_feeds(config, db)
+            logger.info("Manual feed check completed")
+        except Exception as e:
+            logger.error("Manual feed check failed: %s", e, exc_info=True)
+
+    asyncio.create_task(_check_with_logging())
 
     return RedirectResponse("/ui/", status_code=303)
 
