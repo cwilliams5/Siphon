@@ -33,3 +33,4 @@ htmlcov/
 media/
 *.db
 config.yaml
+siphon.bat
