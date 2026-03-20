@@ -53,6 +53,16 @@ async def refresh(request: Request):
 
     return JSONResponse({"status": "accepted"}, status_code=202)
 
+@router.get("/test-cookies")
+async def test_cookies(request: Request):
+    from siphon.downloader import test_youtube_cookies
+    config = request.app.state.config
+
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, test_youtube_cookies, config.cookies)
+
+    return JSONResponse(result)
+
 @router.post("/scheduler/pause")
 async def pause_scheduler(request: Request):
     scheduler = getattr(request.app.state, "scheduler", None)

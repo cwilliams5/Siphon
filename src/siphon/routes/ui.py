@@ -78,6 +78,22 @@ def _get_feed_display(request: Request) -> list[dict]:
 
 
 # ------------------------------------------------------------------ #
+# Cookie test (localhost-only, no auth)
+# ------------------------------------------------------------------ #
+
+@router.get("/test-cookies")
+async def test_cookies_ui(request: Request):
+    import asyncio
+    from fastapi.responses import JSONResponse
+    from siphon.downloader import test_youtube_cookies
+
+    config = request.app.state.config
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(None, test_youtube_cookies, config.cookies)
+    return JSONResponse(result)
+
+
+# ------------------------------------------------------------------ #
 # Feed list
 # ------------------------------------------------------------------ #
 

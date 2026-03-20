@@ -16,7 +16,36 @@
     <div class="stat-value">{{ total_episodes }}</div>
     <div class="stat-label">Episodes</div>
   </div>
+  <div class="stat" id="yt-cookie-status" style="cursor:pointer;" onclick="testCookies()">
+    <div class="stat-value" id="yt-cookie-icon">?</div>
+    <div class="stat-label">YouTube Login</div>
+  </div>
 </div>
+
+<script>
+async function testCookies() {
+  const el = document.getElementById('yt-cookie-icon');
+  const stat = document.getElementById('yt-cookie-status');
+  el.textContent = '...';
+  try {
+    const resp = await fetch('/ui/test-cookies');
+    const data = await resp.json();
+    if (data.ok) {
+      el.textContent = data.premium ? 'Premium' : 'OK';
+      stat.style.borderLeft = '3px solid #27ae60';
+    } else {
+      el.textContent = 'Fail';
+      stat.style.borderLeft = '3px solid #c0392b';
+    }
+    stat.title = data.message;
+  } catch(e) {
+    el.textContent = 'Err';
+    stat.title = 'Could not reach server';
+    stat.style.borderLeft = '3px solid #c0392b';
+  }
+}
+testCookies();
+</script>
 
 {% for feed in feeds %}
 <div class="card">

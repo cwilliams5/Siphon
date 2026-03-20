@@ -77,6 +77,19 @@ class SiphonTray:
         # Update the menu to reflect the new state
         self._update_menu()
 
+    def _on_test_cookies(self, icon, item):
+        """Test YouTube cookies and show result as a notification."""
+        import httpx
+        try:
+            resp = httpx.get(f"{self.base_url}/test-cookies", timeout=30)
+            data = resp.json()
+            msg = data.get("message", "Unknown result")
+            if self._icon:
+                self._icon.notify(msg, "Siphon — YouTube Login")
+        except Exception as exc:
+            if self._icon:
+                self._icon.notify(f"Test failed: {exc}", "Siphon — YouTube Login")
+
     def _on_quit(self, icon, item):
         logger.info("Quit requested from tray")
         icon.stop()
@@ -101,6 +114,7 @@ class SiphonTray:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Open Config", self._on_open_ui, default=True),
             pystray.MenuItem(pause_text, self._on_pause),
+            pystray.MenuItem("Test YouTube Login", self._on_test_cookies),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit", self._on_quit),
         )
