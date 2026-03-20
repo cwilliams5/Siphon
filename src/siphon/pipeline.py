@@ -108,7 +108,7 @@ async def _check_youtube_feed(resolved, config, db) -> None:
             eligible_at = (
                 datetime.now(timezone.utc)
                 + timedelta(minutes=resolved.sponsorblock_delay_minutes)
-            ).isoformat()
+            ).strftime("%Y-%m-%d %H:%M:%S")
 
             db.insert_episode(
                 video_id=video_id,
@@ -176,7 +176,7 @@ async def _check_podcast_feed(resolved, db) -> None:
             )
         else:
             # Podcasts don't need SponsorBlock delay — eligible immediately
-            eligible_at = datetime.now(timezone.utc).isoformat()
+            eligible_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
             db.insert_episode(
                 video_id=guid,

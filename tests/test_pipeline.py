@@ -185,7 +185,7 @@ class TestCheckFeeds:
         assert ep is not None
         assert ep["eligible_at"] is not None
 
-        eligible_at = datetime.fromisoformat(ep["eligible_at"])
+        eligible_at = datetime.fromisoformat(ep["eligible_at"]).replace(tzinfo=timezone.utc)
         delay = timedelta(minutes=config.defaults.sponsorblock_delay_minutes)
         # eligible_at should be approximately now + delay
         assert eligible_at >= before + delay - timedelta(seconds=5)
