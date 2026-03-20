@@ -81,7 +81,7 @@ class SiphonTray:
         """Test YouTube cookies and show result as a notification."""
         import httpx
         try:
-            resp = httpx.get(f"{self.base_url}/test-cookies", timeout=30)
+            resp = httpx.get(f"{self.base_url}/ui/test-cookies", timeout=30)
             data = resp.json()
             msg = data.get("message", "Unknown result")
             if self._icon:

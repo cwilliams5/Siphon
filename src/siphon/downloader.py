@@ -114,56 +114,59 @@ def download_video(
 
 
 def test_youtube_cookies(cookies: CookiesConfig) -> dict:
-    """Test if YouTube cookies are valid and the user is logged in.
+    """Test if YouTube cookies can be read from the browser and user is logged in.
 
     Returns a dict with:
-        ok: bool — True if cookies work and user appears logged in
+        ok: bool — True if cookies were successfully extracted
+        logged_in: bool — True if YouTube login cookies found
         message: str — human-readable status
-        premium: bool | None — True if Premium detected, None if unknown
+        cookie_count: int — number of cookies extracted
     """
-    opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "cookiesfrombrowser": (cookies.browser,),
-        "skip_download": True,
-    }
+    LOGIN_COOKIE_NAMES = {"SID", "SSID", "HSID", "LOGIN_INFO", "__Secure-1PSID"}
+
     try:
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "cookiesfrombrowser": (cookies.browser,),
+        }
         with yt_dlp.YoutubeDL(opts) as ydl:
-            # Extract info from a known short public video
-            info = ydl.extract_info(
-                "https://www.youtube.com/watch?v=jNQXAC9IVRw",  # "Me at the zoo"
-                download=False,
-            )
+            jar = ydl.cookiejar
+            total = len(list(jar))
+            login_cookies = [
+                c for c in jar
+                if c.name in LOGIN_COOKIE_NAMES
+                and (".youtube.com" in c.domain or ".google.com" in c.domain)
+            ]
     except Exception as exc:
         msg = str(exc)
-        if "cookie" in msg.lower() or "locked" in msg.lower():
-            return {
-                "ok": False,
-                "message": f"Cannot read {cookies.browser} cookies — is the browser open? Try closing it.",
-                "premium": None,
-            }
         return {
             "ok": False,
-            "message": f"YouTube request failed: {msg[:200]}",
-            "premium": None,
+            "logged_in": False,
+            "message": f"Cannot read {cookies.browser} cookies — try closing the browser. ({msg[:100]})",
+            "cookie_count": 0,
         }
 
-    if info is None:
-        return {"ok": False, "message": "No response from YouTube", "premium": None}
+    logged_in = len(login_cookies) > 0
 
-    # Check for signs of being logged in / premium
-    # Premium users get formats with 'premium' in the note, or no ads
-    formats = info.get("formats") or []
-    has_premium_formats = any(
-        f.get("format_note", "").lower().startswith("premium")
-        or (f.get("height") or 0) >= 2160
-        for f in formats
-    )
+    if total == 0:
+        return {
+            "ok": False,
+            "logged_in": False,
+            "message": f"No cookies found in {cookies.browser}.",
+            "cookie_count": 0,
+        }
+
+    if logged_in:
+        msg = f"Logged in ({total} cookies from {cookies.browser})"
+    else:
+        msg = f"Cookies loaded but not logged into YouTube ({total} cookies from {cookies.browser})"
 
     return {
         "ok": True,
-        "message": "YouTube cookies working" + (" (Premium detected)" if has_premium_formats else ""),
-        "premium": has_premium_formats if formats else None,
+        "logged_in": logged_in,
+        "message": msg,
+        "cookie_count": total,
     }
 
 

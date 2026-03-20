@@ -30,9 +30,12 @@ async function testCookies() {
   try {
     const resp = await fetch('/ui/test-cookies');
     const data = await resp.json();
-    if (data.ok) {
-      el.textContent = data.premium ? 'Premium' : 'OK';
+    if (data.ok && data.logged_in) {
+      el.textContent = 'Logged In';
       stat.style.borderLeft = '3px solid #27ae60';
+    } else if (data.ok) {
+      el.textContent = 'No Login';
+      stat.style.borderLeft = '3px solid #f39c12';
     } else {
       el.textContent = 'Fail';
       stat.style.borderLeft = '3px solid #c0392b';
