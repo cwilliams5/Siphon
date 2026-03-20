@@ -92,7 +92,8 @@ class Database:
 
     def upsert_feed(self, name: str, url: str, feed_type: str = "youtube") -> None:
         self.conn.execute(
-            "INSERT OR REPLACE INTO feeds (name, url, feed_type) VALUES (?, ?, ?)",
+            """INSERT INTO feeds (name, url, feed_type) VALUES (?, ?, ?)
+               ON CONFLICT(name) DO UPDATE SET url = excluded.url, feed_type = excluded.feed_type""",
             (name, url, feed_type),
         )
         self.conn.commit()

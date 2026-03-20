@@ -110,6 +110,21 @@ class TestFeeds:
         feed = db.get_feed("tech")
         assert feed["url"] == "https://new-url.com"
 
+    def test_upsert_does_not_delete_episodes(self, db: Database):
+        """Regression: INSERT OR REPLACE triggers CASCADE DELETE on episodes.
+        upsert_feed must use ON CONFLICT DO UPDATE instead."""
+        _add_feed(db)
+        _add_episode(db, "v1")
+        _add_episode(db, "v2", title="Ep 2")
+        assert len(db.get_episodes_by_feed("tech")) == 2
+
+        # Re-upsert the same feed (simulates config reload)
+        db.upsert_feed("tech", "https://youtube.com/@tech")
+
+        # Episodes must still exist
+        eps = db.get_episodes_by_feed("tech")
+        assert len(eps) == 2, f"Expected 2 episodes, got {len(eps)} — upsert cascaded a delete!"
+
     def test_upsert_podcast_feed(self, db: Database):
         _add_feed(db, "pod", "https://example.com/rss", "podcast")
         feed = db.get_feed("pod")
