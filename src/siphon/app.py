@@ -4,8 +4,10 @@ import logging
 import secrets
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.responses import Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from siphon.config import SiphonConfig
 from siphon.db import Database
@@ -99,7 +101,16 @@ def create_app(config: SiphonConfig) -> FastAPI:
     app.include_router(media_router, dependencies=[Depends(auth_dep)])
     app.include_router(api_router, dependencies=[Depends(auth_dep)])
 
-    # Web UI does NOT require auth — local/Tailscale access only
+    # Web UI — localhost only, no auth needed
     app.include_router(ui_router)
+
+    # Lock down /ui/ to localhost
+    @app.middleware("http")
+    async def localhost_only_ui(request: Request, call_next):
+        if request.url.path.startswith("/ui"):
+            client_ip = request.client.host if request.client else None
+            if client_ip not in ("127.0.0.1", "::1", "localhost"):
+                return Response(status_code=403, content="Forbidden")
+        return await call_next(request)
 
     return app
