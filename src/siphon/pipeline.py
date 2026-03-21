@@ -81,9 +81,17 @@ def _normalize_youtube_url(url: str) -> str:
 async def _check_youtube_feed(resolved, config, db) -> None:
     """Check a YouTube feed for new episodes."""
     feed_url = _normalize_youtube_url(resolved.url)
+
+    # Only fetch recent videos — no need to scan the entire channel history.
+    feed_db = db.get_feed(resolved.name)
+    if feed_db and feed_db.get("last_checked_at") is None:
+        max_entries = config.schedule.youtube_initial_backfill
+    else:
+        max_entries = config.schedule.youtube_check_limit
+
     loop = asyncio.get_event_loop()
     metadata = await loop.run_in_executor(
-        None, extract_feed_metadata, feed_url, config.cookies
+        None, extract_feed_metadata, feed_url, config.cookies, max_entries
     )
 
     # Store channel thumbnail as feed artwork

@@ -13,14 +13,17 @@ import yt_dlp
 from siphon.config import CookiesConfig, ResolvedFeed
 
 
-def build_extract_opts(cookies: CookiesConfig) -> dict:
+def build_extract_opts(cookies: CookiesConfig, max_entries: int | None = None) -> dict:
     """Return yt-dlp options for flat playlist extraction."""
-    return {
+    opts = {
         "extract_flat": True,
         "quiet": True,
         "no_warnings": True,
         "cookiesfrombrowser": (cookies.browser,),
     }
+    if max_entries is not None:
+        opts["playlistend"] = max_entries
+    return opts
 
 
 def build_download_opts(
@@ -86,9 +89,11 @@ def build_download_opts(
     return opts
 
 
-def extract_feed_metadata(url: str, cookies: CookiesConfig) -> dict:
+def extract_feed_metadata(
+    url: str, cookies: CookiesConfig, max_entries: int | None = None
+) -> dict:
     """Extract flat playlist metadata without downloading."""
-    opts = build_extract_opts(cookies)
+    opts = build_extract_opts(cookies, max_entries=max_entries)
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(url, download=False)

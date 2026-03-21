@@ -67,6 +67,10 @@ class ScheduleConfig(BaseModel):
     youtube_feeds_per_check: int = 10
     podcast_feeds_per_check: int = 30
 
+    # YouTube — how many recent videos to scan per check
+    youtube_initial_backfill: int = 100
+    youtube_check_limit: int = 50
+
     # YouTube — gentle on a single platform
     youtube_download_interval_minutes: int = 5
     youtube_download_workers: int = 2
