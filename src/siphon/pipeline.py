@@ -12,6 +12,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
+from siphon.activity import log_activity
 from siphon.config import SiphonConfig, resolve_feed
 from siphon.db import Database
 from siphon.downloader import (
@@ -55,6 +56,7 @@ async def check_feeds(config: SiphonConfig, db: Database) -> None:
             resolved = resolve_feed(feed_config, config.defaults)
 
             try:
+                log_activity(f"Checking {feed_db['name']}", feed=feed_db["name"])
                 if resolved.type == "podcast":
                     await _check_podcast_feed(resolved, db)
                 else:
@@ -104,6 +106,7 @@ async def _check_youtube_feed(resolved, config, db) -> None:
             db.update_feed_image(resolved.name, image_url)
 
     entries = metadata.get("entries") or []
+    new_count = 0
 
     for entry in entries:
         video_id = entry["id"]
@@ -151,7 +154,10 @@ async def _check_youtube_feed(resolved, config, db) -> None:
                 eligible_at=eligible_at,
                 status="pending",
             )
+            new_count += 1
 
+    if new_count > 0:
+        log_activity(f"Found {new_count} new episodes", feed=resolved.name)
     logger.info("Checked YouTube feed %s: %d entries", resolved.name, len(entries))
 
 
@@ -226,6 +232,8 @@ async def _check_podcast_feed(resolved, db) -> None:
             )
             new_count += 1
 
+    if new_count > 0:
+        log_activity(f"Found {new_count} new episodes", feed=resolved.name)
     logger.info("Checked podcast feed %s: %d episodes, %d new", resolved.name, len(episodes), new_count)
 
 
@@ -261,7 +269,9 @@ def _get_keep_per_feed(config: SiphonConfig, feed_type: str) -> int:
 async def process_downloads(config: SiphonConfig, db: Database) -> None:
     """Download eligible episodes and prune disk when needed."""
 
-    db.promote_eligible_episodes()
+    promoted = db.promote_eligible_episodes()
+    if promoted and promoted > 0:
+        log_activity(f"Promoted {promoted} episodes to eligible")
     db.reset_stale_downloads()
     db.retry_failed_episodes()
 
@@ -274,6 +284,10 @@ async def process_downloads(config: SiphonConfig, db: Database) -> None:
 
         if limit == 0:
             if remaining == 0:
+                log_activity(
+                    f"Rate limit reached for {feed_type} ({recent}/{max_per_hour})",
+                    level="warning",
+                )
                 logger.info(
                     "Hourly %s download cap reached (%d/%d), skipping",
                     feed_type, recent, max_per_hour,
@@ -289,6 +303,7 @@ async def process_downloads(config: SiphonConfig, db: Database) -> None:
 
             video_id = episode["video_id"]
             feed_name = episode["feed_name"]
+            title = episode.get("title", video_id)
 
             feed_config = None
             for fc in config.feeds:
@@ -302,12 +317,15 @@ async def process_downloads(config: SiphonConfig, db: Database) -> None:
 
             resolved = resolve_feed(feed_config, config.defaults)
             db.update_episode_status(video_id, feed_name, "downloading")
+            log_activity(f"Downloading {title[:50]}", feed=feed_name)
 
             try:
                 if resolved.type == "podcast":
                     await _download_podcast_episode(episode, resolved, config, db)
                 else:
                     await _download_youtube_episode(episode, resolved, config, db)
+
+                log_activity(f"Downloaded {title[:50]}", feed=feed_name)
 
                 # LLM trim post-processing
                 if resolved.llm_trim:
@@ -317,6 +335,7 @@ async def process_downloads(config: SiphonConfig, db: Database) -> None:
 
             except Exception as exc:
                 logger.error("Download failed for %s/%s: %s", feed_name, video_id, exc)
+                log_activity(f"Download failed: {str(exc)[:80]}", feed=feed_name, level="error")
                 db.update_episode_status(
                     video_id, feed_name, "failed",
                     error=str(exc),
@@ -438,8 +457,10 @@ async def _run_llm_trim(episode, resolved, config, db) -> None:
     video_id = episode["video_id"]
     feed_name = episode["feed_name"]
     file_path = episode["file_path"]
+    title = episode.get("title", video_id)
 
     logger.info("Running LLM trim on %s/%s", feed_name, video_id)
+    log_activity(f"LLM processing {title[:50]}", feed=feed_name)
     db.update_episode_status(video_id, feed_name, "done", llm_trim_status="pending")
 
     loop = asyncio.get_event_loop()
@@ -455,9 +476,11 @@ async def _run_llm_trim(episode, resolved, config, db) -> None:
     )
 
     if result["llm_trim_status"] == "done":
+        cuts = result["llm_cuts_applied"]
+        log_activity(f"LLM: {cuts} cuts applied to {title[:50]}", feed=feed_name)
         logger.info(
             "LLM trim complete for %s/%s: %d cuts applied",
-            feed_name, video_id, result["llm_cuts_applied"],
+            feed_name, video_id, cuts,
         )
     else:
         logger.warning(

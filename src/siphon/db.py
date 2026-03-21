@@ -298,12 +298,13 @@ class Database:
             ).fetchone()
         return int(row["cnt"])
 
-    def promote_eligible_episodes(self) -> None:
-        self.conn.execute(
+    def promote_eligible_episodes(self) -> int:
+        cursor = self.conn.execute(
             "UPDATE episodes SET status = 'eligible', updated_at = datetime('now') "
             "WHERE status = 'pending' AND eligible_at <= datetime('now')"
         )
         self.conn.commit()
+        return cursor.rowcount
 
     def reset_stale_downloads(self, hours: int = 6) -> None:
         self.conn.execute(

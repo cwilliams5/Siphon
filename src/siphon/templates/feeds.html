@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title_suffix %} - Feeds{% endblock %}
 {% block content %}
+<meta http-equiv="refresh" content="15">
 <h1>Feeds</h1>
 
 <div class="status-bar">
@@ -23,6 +24,17 @@
   <form method="post" action="/ui/check-now" style="display:flex; align-items:center;">
     <button type="submit" class="btn btn-small">Check Feeds Now</button>
   </form>
+</div>
+
+<div class="card" style="padding:12px;">
+  <div style="display:flex; gap:24px; flex-wrap:wrap; font-size:0.9em;">
+    <span>YouTube: {{ status.youtube_downloads_this_hour }}/{{ status.youtube_downloads_max }} this hour</span>
+    <span>Podcast: {{ status.podcast_downloads_this_hour }}/{{ status.podcast_downloads_max }} this hour</span>
+    <span>Downloading: {{ status.downloading_count }}</span>
+    <span>Ready: {{ status.eligible_count }}</span>
+    <span>Pending: {{ status.pending_count }}</span>
+    <span>Done: {{ status.done_count }}</span>
+  </div>
 </div>
 
 <script>
@@ -89,7 +101,14 @@ testCookies();
     {% if feed.last_error %} &mdash; <span style="color:#e74c3c">Error: {{ feed.last_error }}</span>{% endif %}
   </div>
   <div style="font-size:0.85em; color:#888; margin-top:4px;">
-    Episodes: {{ feed.episode_counts | default({}) }}
+    {% set counts = feed.episode_counts | default({}) %}
+    {% set parts = [] %}
+    {% if counts.get('done', 0) > 0 %}{% set _ = parts.append('done: ' ~ counts['done']) %}{% endif %}
+    {% if counts.get('eligible', 0) > 0 %}{% set _ = parts.append('ready: ' ~ counts['eligible']) %}{% endif %}
+    {% if counts.get('downloading', 0) > 0 %}{% set _ = parts.append('downloading: ' ~ counts['downloading']) %}{% endif %}
+    {% if counts.get('pending', 0) > 0 %}{% set _ = parts.append('pending: ' ~ counts['pending']) %}{% endif %}
+    {% if counts.get('failed', 0) > 0 %}{% set _ = parts.append('failed: ' ~ counts['failed']) %}{% endif %}
+    {% if parts %}{{ parts | join(' | ') }}{% else %}no episodes{% endif %}
   </div>
 
   <div id="edit-{{ feed.name }}" class="hidden" style="margin-top:12px; padding-top:12px; border-top:1px solid #333;">
@@ -211,6 +230,18 @@ testCookies();
   No feeds configured. <a href="/ui/add">Add one</a> or <a href="/ui/import">import OPML</a>.
 </div>
 {% endif %}
+
+<h2>Activity Log</h2>
+<div class="card" style="max-height:300px; overflow-y:auto; font-family:monospace; font-size:0.85em; padding:8px 12px;">
+  {% for entry in activity_log %}
+  <div style="{% if entry.level == 'error' %}color:#e74c3c{% elif entry.level == 'warning' %}color:#f39c12{% else %}color:#888{% endif %}">
+    {{ entry.time }} {% if entry.feed %}[{{ entry.feed }}]{% endif %} {{ entry.message }}
+  </div>
+  {% endfor %}
+  {% if not activity_log %}
+  <div style="color:#666;">No activity yet. Hit "Check Feeds Now" to start.</div>
+  {% endif %}
+</div>
 
 <script>
 function toggleEdit(name) {

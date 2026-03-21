@@ -11,7 +11,8 @@ from fastapi import APIRouter, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-from siphon.config import FeedConfig, resolve_feed
+from siphon.config import FeedConfig, SiphonConfig, resolve_feed
+from siphon.db import Database
 
 router = APIRouter(prefix="/ui")
 
@@ -86,6 +87,35 @@ def _get_feed_display(request: Request) -> list[dict]:
     return feeds_display
 
 
+def _get_system_status(config: SiphonConfig, db: Database) -> dict:
+    """Build a summary dict of system-wide status for the dashboard."""
+    sched = config.schedule
+    yt_recent = db.get_recent_download_count(hours=1, feed_type="youtube")
+    pod_recent = db.get_recent_download_count(hours=1, feed_type="podcast")
+
+    row = db.conn.execute(
+        "SELECT "
+        "  SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count, "
+        "  SUM(CASE WHEN status = 'eligible' THEN 1 ELSE 0 END) AS eligible_count, "
+        "  SUM(CASE WHEN status = 'downloading' THEN 1 ELSE 0 END) AS downloading_count, "
+        "  SUM(CASE WHEN status = 'done' AND llm_trim_status = 'pending' THEN 1 ELSE 0 END) AS llm_pending_count, "
+        "  SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done_count "
+        "FROM episodes"
+    ).fetchone()
+
+    return {
+        "youtube_downloads_this_hour": yt_recent,
+        "youtube_downloads_max": sched.youtube_max_downloads_per_hour,
+        "podcast_downloads_this_hour": pod_recent,
+        "podcast_downloads_max": sched.podcast_max_downloads_per_hour,
+        "pending_count": int(row["pending_count"] or 0),
+        "eligible_count": int(row["eligible_count"] or 0),
+        "downloading_count": int(row["downloading_count"] or 0),
+        "llm_pending_count": int(row["llm_pending_count"] or 0),
+        "done_count": int(row["done_count"] or 0),
+    }
+
+
 # ------------------------------------------------------------------ #
 # Cookie test (localhost-only, no auth)
 # ------------------------------------------------------------------ #
@@ -99,6 +129,16 @@ async def test_cookies_ui(request: Request):
     loop = asyncio.get_event_loop()
     result = await loop.run_in_executor(None, test_youtube_cookies, config.cookies)
     return JSONResponse(result)
+
+
+# ------------------------------------------------------------------ #
+# Activity log JSON endpoint
+# ------------------------------------------------------------------ #
+
+@router.get("/activity")
+async def activity_log(request: Request):
+    from siphon.activity import get_recent
+    return JSONResponse(get_recent(50))
 
 
 # ------------------------------------------------------------------ #
@@ -117,6 +157,11 @@ async def feeds_page(request: Request):
         sum(f["episode_counts"].values()) for f in feeds
     )
 
+    status = _get_system_status(config, db)
+
+    from siphon.activity import get_recent
+    activity_log = get_recent(50)
+
     # Build auth-embedded base URL for RSS links
     # https://user:pass@host/feed/name
     from urllib.parse import urlparse
@@ -130,6 +175,8 @@ async def feeds_page(request: Request):
         "disk_usage_gb": round(disk_usage / (1024 ** 3), 2),
         "max_disk_gb": config.storage.max_disk_gb,
         "total_episodes": total_episodes,
+        "status": status,
+        "activity_log": activity_log,
         "auth_base_url": auth_base_url,
         "messages": _get_messages(request),
     })
