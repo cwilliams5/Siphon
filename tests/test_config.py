@@ -87,7 +87,6 @@ class TestLoadConfig:
         assert cfg.llm.whisper_model == "base"
         assert cfg.llm.whisper_device == "cpu"
         assert cfg.llm.claude_model == "claude-sonnet-4-6"
-        assert cfg.llm.claude_concurrency == 3
         assert cfg.llm.confidence_threshold == 0.75
         assert cfg.llm.min_segment_duration == 7
         assert cfg.llm.max_segment_duration == 300

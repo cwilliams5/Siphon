@@ -105,7 +105,6 @@ class LLMConfig(BaseModel):
     whisper_word_timestamps: bool = True
     word_timestamps_max_minutes: int = 45
     claude_model: str = "claude-sonnet-4-6"
-    claude_concurrency: int = 3
     claude_effort: str = "medium"
     default_ad_prompt: str = DEFAULT_AD_PROMPT
     confidence_threshold: float = 0.75

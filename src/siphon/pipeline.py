@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 async def check_feeds(config: SiphonConfig, db: Database) -> None:
     """Discover new episodes from the next batch of feeds."""
+    log_activity("Starting feed check")
 
     for feed_type, limit in (
         ("youtube", config.schedule.youtube_feeds_per_check),
@@ -67,6 +68,8 @@ async def check_feeds(config: SiphonConfig, db: Database) -> None:
             except Exception as exc:
                 logger.error("Error checking feed %s: %s", feed_db["name"], exc)
                 db.update_feed_checked(feed_db["name"], error=str(exc))
+
+    log_activity("Feed check complete")
 
 
 def _normalize_youtube_url(url: str) -> str:
@@ -268,6 +271,9 @@ def _get_keep_per_feed(config: SiphonConfig, feed_type: str) -> int:
 
 async def process_downloads(config: SiphonConfig, db: Database) -> None:
     """Download eligible episodes and prune disk when needed."""
+    log_activity("Starting download processing")
+
+    _llm_processed: set = set()  # track episodes processed this cycle
 
     promoted = db.promote_eligible_episodes()
     if promoted and promoted > 0:
@@ -332,6 +338,7 @@ async def process_downloads(config: SiphonConfig, db: Database) -> None:
                     ep = db.get_episode(video_id, feed_name)
                     if ep and ep["status"] == "done" and ep.get("file_path"):
                         await _run_llm_trim(ep, resolved, config, db)
+                        _llm_processed.add((video_id, feed_name))
 
             except Exception as exc:
                 logger.error("Download failed for %s/%s: %s", feed_name, video_id, exc)
@@ -343,15 +350,22 @@ async def process_downloads(config: SiphonConfig, db: Database) -> None:
                 )
 
     # Re-process episodes that need LLM trim (reset from error or newly enabled)
-    await _process_pending_llm(config, db)
+    await _process_pending_llm(config, db, skip=_llm_processed)
 
+    log_activity("Download processing complete")
     await _prune_disk(config, db)
 
 
-async def _process_pending_llm(config: SiphonConfig, db: Database) -> None:
+async def _process_pending_llm(
+    config: SiphonConfig, db: Database, *, skip: set | None = None,
+) -> None:
     """Re-process done episodes that need LLM trim (null llm_trim_status)."""
+    skip = skip or set()
     episodes = db.get_episodes_needing_llm(limit=3)
     for ep in episodes:
+        if (ep["video_id"], ep["feed_name"]) in skip:
+            continue
+
         feed_config = None
         for fc in config.feeds:
             if fc.name == ep["feed_name"]:

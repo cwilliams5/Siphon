@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="5">
+  <style>
+    body { font-family: monospace; font-size: 0.85em; background: #16213e; color: #888;
+           margin: 0; padding: 8px 12px; }
+    .error { color: #e74c3c; }
+    .warning { color: #f39c12; }
+  </style>
+</head>
+<body>
+{% for entry in activity_log %}
+<div class="{{ entry.level }}">{{ entry.time }} {% if entry.feed %}[{{ entry.feed }}]{% endif %} {{ entry.message }}</div>
+{% endfor %}
+{% if not activity_log %}
+<div style="color:#666;">No activity yet. Hit "Check Feeds Now" to start.</div>
+{% endif %}
+</body>
+</html>

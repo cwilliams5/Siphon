@@ -41,7 +41,6 @@ llm:
   whisper_device: "cpu"           # cpu | cuda
   whisper_word_timestamps: true   # word-level timestamps for precise ad cuts
   claude_model: "claude-sonnet-4-6"
-  claude_concurrency: 3
   claude_effort: "medium"         # low | medium | high | max
   confidence_threshold: 0.75
   min_segment_duration: 7

@@ -103,6 +103,10 @@ def _get_system_status(config: SiphonConfig, db: Database) -> dict:
         "FROM episodes"
     ).fetchone()
 
+    llm_processing = db.conn.execute(
+        "SELECT COUNT(*) FROM episodes WHERE status = 'done' AND llm_trim_status IS NULL AND file_path IS NOT NULL"
+    ).fetchone()[0]
+
     return {
         "youtube_downloads_this_hour": yt_recent,
         "youtube_downloads_max": sched.youtube_max_downloads_per_hour,
@@ -113,6 +117,7 @@ def _get_system_status(config: SiphonConfig, db: Database) -> dict:
         "downloading_count": int(row["downloading_count"] or 0),
         "llm_pending_count": int(row["llm_pending_count"] or 0),
         "done_count": int(row["done_count"] or 0),
+        "llm_processing": llm_processing,
     }
 
 
@@ -141,6 +146,15 @@ async def activity_log(request: Request):
     return JSONResponse(get_recent(50))
 
 
+@router.get("/activity-log", response_class=HTMLResponse)
+async def activity_log_page(request: Request):
+    from siphon.activity import get_recent
+    return templates.TemplateResponse("activity_log.html", {
+        "request": request,
+        "activity_log": get_recent(50),
+    })
+
+
 # ------------------------------------------------------------------ #
 # Feed list
 # ------------------------------------------------------------------ #
@@ -159,9 +173,6 @@ async def feeds_page(request: Request):
 
     status = _get_system_status(config, db)
 
-    from siphon.activity import get_recent
-    activity_log = get_recent(50)
-
     # Build auth-embedded base URL for RSS links
     # https://user:pass@host/feed/name
     from urllib.parse import urlparse
@@ -176,7 +187,6 @@ async def feeds_page(request: Request):
         "max_disk_gb": config.storage.max_disk_gb,
         "total_episodes": total_episodes,
         "status": status,
-        "activity_log": activity_log,
         "auth_base_url": auth_base_url,
         "messages": _get_messages(request),
     })
