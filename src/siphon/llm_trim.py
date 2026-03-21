@@ -98,13 +98,23 @@ def _run_pipeline(
         }
 
     # Step 3: Detect ads with Claude
+    # Skip word timestamps for long episodes to avoid context window limits
+    words = transcript.get("words")
+    duration_minutes = transcript.get("duration", 0) / 60
+    if duration_minutes > llm_config.word_timestamps_max_minutes:
+        logger.info(
+            "Episode is %.0f min (> %d min limit), using segment-only timestamps",
+            duration_minutes, llm_config.word_timestamps_max_minutes,
+        )
+        words = None
+
     prompt = resolve_prompt(feed, llm_config)
     raw_result = detect_ads(
         transcript_text,
         prompt,
         model=llm_config.claude_model,
         effort=llm_config.claude_effort,
-        words=transcript.get("words"),
+        words=words,
         segments=transcript.get("segments"),
     )
 

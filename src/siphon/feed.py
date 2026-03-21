@@ -153,21 +153,26 @@ def generate_feed_xml(
 
         # Build processing tag
         desc_parts: list[str] = []
+        llm_status = ep.get("llm_trim_status")
         llm_cuts = ep.get("llm_cuts_applied")
         sb_cuts = ep.get("sb_cuts_applied")
-        has_llm = llm_cuts is not None
-        has_sb = sb_cuts is not None or sponsorblock_active
 
-        if has_llm and has_sb:
-            sb_val = sb_cuts if sb_cuts is not None else 0
-            llm_val = llm_cuts if llm_cuts is not None else 0
-            desc_parts.append(f"[Siphon | LLM: {llm_val} cuts | SB: {sb_val} cuts]")
-        elif has_sb:
-            sb_val = sb_cuts if sb_cuts is not None else 0
-            desc_parts.append(f"[Siphon | SB: {sb_val} cuts]")
-        elif has_llm:
-            llm_val = llm_cuts if llm_cuts is not None else 0
-            desc_parts.append(f"[Siphon | LLM: {llm_val} cuts]")
+        tag_parts = []
+        # LLM status
+        if llm_status == "error":
+            tag_parts.append("LLM: TRIM ERROR")
+        elif llm_status == "pending":
+            tag_parts.append("LLM: processing")
+        elif llm_status == "done":
+            tag_parts.append(f"LLM: {llm_cuts or 0} cuts")
+        # SB status
+        if sb_cuts is not None:
+            tag_parts.append(f"SB: {sb_cuts} cuts")
+        elif sponsorblock_active:
+            tag_parts.append("SB: on")
+
+        if tag_parts:
+            desc_parts.append(f"[Siphon | {' | '.join(tag_parts)}]")
         else:
             desc_parts.append("[Siphon]")
 
