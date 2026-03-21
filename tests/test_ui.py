@@ -9,6 +9,7 @@ import pytest
 
 from siphon.app import create_app
 from siphon.config import (
+    YouTubeConfig,
     AuthConfig,
     CookiesConfig,
     FeedConfig,
@@ -25,6 +26,7 @@ def config(tmp_path):
     return SiphonConfig(
         server=ServerConfig(host="127.0.0.1", port=8585, base_url="https://test.example.com"),
         auth=AuthConfig(username="testuser", password="testpass"),
+        youtube=YouTubeConfig(api_key="test-key"),
         storage=StorageConfig(
             download_dir=str(tmp_path / "media"),
             database=str(tmp_path / "test.db"),
@@ -319,7 +321,8 @@ class TestCheckNow:
         config = SiphonConfig(
             server=ServerConfig(host="127.0.0.1", port=8585, base_url="https://test.example.com"),
             auth=AuthConfig(username="testuser", password="testpass"),
-            storage=StorageConfig(
+            youtube=YouTubeConfig(api_key="test-key"),
+        storage=StorageConfig(
                 download_dir=str(tmp_path / "media"),
                 database=str(tmp_path / "test.db"),
                 max_disk_gb=10,
@@ -384,7 +387,9 @@ class TestCheckNow:
         async def _noop_downloads(*a, **kw):
             pass
 
-        with patch("siphon.pipeline.extract_feed_metadata", return_value={"entries": fake_entries}), \
+        with patch("siphon.youtube.resolve_channel_id", return_value="UC_TEST"), \
+             patch("siphon.youtube.get_channel_metadata", return_value={}), \
+             patch("siphon.youtube.list_videos", return_value=fake_entries), \
              patch("siphon.pipeline.process_downloads", side_effect=_noop_downloads):
             resp = await client.post("/ui/check-now", follow_redirects=False)
             assert resp.status_code == 303
@@ -411,7 +416,9 @@ class TestCheckNow:
         """If check_feeds raises, the task wrapper must catch it (not crash the server)."""
         app, client = app_and_client
 
-        with patch("siphon.pipeline.extract_feed_metadata", side_effect=RuntimeError("boom")):
+        with patch("siphon.youtube.list_videos", side_effect=RuntimeError("boom")), \
+             patch("siphon.youtube.resolve_channel_id", return_value="UC_TEST"), \
+             patch("siphon.youtube.get_channel_metadata", return_value={}):
             resp = await client.post("/ui/check-now", follow_redirects=False)
             assert resp.status_code == 303
 

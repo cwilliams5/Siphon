@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from siphon.config import (
+    YouTubeConfig,
     AuthConfig,
     CookiesConfig,
     FeedConfig,
@@ -50,6 +51,7 @@ def config(download_dir):
     return SiphonConfig(
         server=ServerConfig(host="127.0.0.1", port=8080, base_url="http://localhost"),
         auth=AuthConfig(username="user", password="pass"),
+        youtube=YouTubeConfig(api_key="test-key"),
         storage=StorageConfig(
             download_dir=download_dir,
             database=":memory:",
@@ -111,11 +113,13 @@ def _sample_entries():
 
 
 class TestCheckFeeds:
-    @patch("siphon.pipeline.extract_feed_metadata")
+    @patch("siphon.youtube.resolve_channel_id", return_value="UC_TEST")
+    @patch("siphon.youtube.get_channel_metadata", return_value={})
+    @patch("siphon.youtube.list_videos")
     async def test_check_feeds_discovers_new_episodes(
-        self, mock_extract, config, db
+        self, mock_list, mock_meta, mock_resolve, config, db
     ):
-        mock_extract.return_value = {"entries": _sample_entries()}
+        mock_list.return_value = _sample_entries()
 
         await check_feeds(config, db)
 
@@ -130,8 +134,10 @@ class TestCheckFeeds:
         assert ep2["title"] == "Another Video"
         assert ep2["status"] == "pending"
 
-    @patch("siphon.pipeline.extract_feed_metadata")
-    async def test_check_feeds_filters_shorts(self, mock_extract, config, db):
+    @patch("siphon.youtube.resolve_channel_id", return_value="UC_TEST")
+    @patch("siphon.youtube.get_channel_metadata", return_value={})
+    @patch("siphon.youtube.list_videos")
+    async def test_check_feeds_filters_shorts(self, mock_list, mock_meta, mock_resolve, config, db):
         entries = [
             {
                 "id": "short01",
@@ -144,7 +150,7 @@ class TestCheckFeeds:
                 "thumbnail": "https://img.youtube.com/vi/short01/0.jpg",
             },
         ]
-        mock_extract.return_value = {"entries": entries}
+        mock_list.return_value = entries
 
         await check_feeds(config, db)
 
@@ -152,8 +158,10 @@ class TestCheckFeeds:
         assert ep is not None
         assert ep["status"] == "filtered"
 
-    @patch("siphon.pipeline.extract_feed_metadata")
-    async def test_check_feeds_skips_existing(self, mock_extract, config, db):
+    @patch("siphon.youtube.resolve_channel_id", return_value="UC_TEST")
+    @patch("siphon.youtube.get_channel_metadata", return_value={})
+    @patch("siphon.youtube.list_videos")
+    async def test_check_feeds_skips_existing(self, mock_list, mock_meta, mock_resolve, config, db):
         # Pre-insert the episode
         db.insert_episode(
             video_id="vid001",
@@ -162,7 +170,7 @@ class TestCheckFeeds:
             status="done",
         )
 
-        mock_extract.return_value = {"entries": _sample_entries()}
+        mock_list.return_value = _sample_entries()
 
         await check_feeds(config, db)
 
@@ -171,11 +179,11 @@ class TestCheckFeeds:
         assert ep["title"] == "Already Here"
         assert ep["status"] == "done"
 
-    @patch("siphon.pipeline.extract_feed_metadata")
-    async def test_check_feeds_sets_eligible_at(self, mock_extract, config, db):
-        mock_extract.return_value = {
-            "entries": [_sample_entries()[0]],
-        }
+    @patch("siphon.youtube.resolve_channel_id", return_value="UC_TEST")
+    @patch("siphon.youtube.get_channel_metadata", return_value={})
+    @patch("siphon.youtube.list_videos")
+    async def test_check_feeds_sets_eligible_at(self, mock_list, mock_meta, mock_resolve, config, db):
+        mock_list.return_value = [_sample_entries()[0]]
 
         before = datetime.now(timezone.utc)
         await check_feeds(config, db)
@@ -191,9 +199,11 @@ class TestCheckFeeds:
         assert eligible_at >= before + delay - timedelta(seconds=5)
         assert eligible_at <= after + delay + timedelta(seconds=5)
 
-    @patch("siphon.pipeline.extract_feed_metadata")
-    async def test_check_feeds_handles_error(self, mock_extract, config, db):
-        mock_extract.side_effect = Exception("network timeout")
+    @patch("siphon.youtube.resolve_channel_id", return_value="UC_TEST")
+    @patch("siphon.youtube.get_channel_metadata", return_value={})
+    @patch("siphon.youtube.list_videos")
+    async def test_check_feeds_handles_error(self, mock_list, mock_meta, mock_resolve, config, db):
+        mock_list.side_effect = Exception("network timeout")
 
         await check_feeds(config, db)
 

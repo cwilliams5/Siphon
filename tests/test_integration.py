@@ -103,7 +103,7 @@ class TestConfigRoundTrip:
         data = {
             "server": {"host": "0.0.0.0", "port": 8585, "base_url": "http://localhost"},
             "auth": {"username": "u", "password": "p"},
-            "storage": {"download_dir": str(tmp_path / "media"), "database": ":memory:"},
+            "storage": {"download_dir": str(tmp_path / "media"), "database": ":memory:"}, "youtube": {"api_key": "test"},
             "feeds": [
                 {"name": "my-yt", "url": "https://youtube.com/@test", "type": "youtube"},
                 {"name": "my-pod", "url": "https://example.com/rss", "type": "podcast",

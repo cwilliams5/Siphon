@@ -90,6 +90,10 @@ class ScheduleConfig(BaseModel):
     podcast_max_downloads_per_hour: int = 120
 
 
+class YouTubeConfig(BaseModel):
+    api_key: str
+
+
 class CookiesConfig(BaseModel):
     source: str = "browser"
     browser: str = "firefox"
@@ -221,6 +225,7 @@ class SiphonConfig(BaseModel):
     server: ServerConfig
     auth: AuthConfig
     storage: StorageConfig
+    youtube: YouTubeConfig
     schedule: ScheduleConfig = ScheduleConfig()
     cookies: CookiesConfig = CookiesConfig()
     defaults: FeedDefaults = FeedDefaults()

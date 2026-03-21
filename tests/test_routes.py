@@ -7,6 +7,7 @@ import pytest
 
 from siphon.app import create_app
 from siphon.config import (
+    YouTubeConfig,
     AuthConfig,
     CookiesConfig,
     FeedConfig,
@@ -23,6 +24,7 @@ def config(tmp_path):
     return SiphonConfig(
         server=ServerConfig(host="127.0.0.1", port=8585, base_url="https://test.example.com"),
         auth=AuthConfig(username="testuser", password="testpass"),
+        youtube=YouTubeConfig(api_key="test-key"),
         storage=StorageConfig(
             download_dir=str(tmp_path / "media"),
             database=str(tmp_path / "test.db"),

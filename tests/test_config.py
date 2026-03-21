@@ -313,7 +313,7 @@ class TestValidation:
     def test_missing_server(self, tmp_path):
         data = {
             "auth": {"username": "u", "password": "p"},
-            "storage": {"download_dir": ".", "database": "db"},
+            "storage": {"download_dir": ".", "database": "db"}, "youtube": {"api_key": "test"}, "youtube": {"api_key": "test"},
             "feeds": [{"name": "f", "url": "http://x"}],
         }
         p = tmp_path / "bad.yaml"
@@ -324,7 +324,7 @@ class TestValidation:
     def test_missing_auth(self, tmp_path):
         data = {
             "server": {"host": "0.0.0.0", "port": 8080, "base_url": "http://x"},
-            "storage": {"download_dir": ".", "database": "db"},
+            "storage": {"download_dir": ".", "database": "db"}, "youtube": {"api_key": "test"}, "youtube": {"api_key": "test"},
             "feeds": [{"name": "f", "url": "http://x"}],
         }
         p = tmp_path / "bad.yaml"
@@ -347,7 +347,7 @@ class TestValidation:
         data = {
             "server": {"host": "0.0.0.0", "port": 8080, "base_url": "http://x"},
             "auth": {"username": "u", "password": "p"},
-            "storage": {"download_dir": ".", "database": "db"},
+            "storage": {"download_dir": ".", "database": "db"}, "youtube": {"api_key": "test"}, "youtube": {"api_key": "test"},
         }
         p = tmp_path / "bad.yaml"
         p.write_text(yaml.dump(data))
@@ -358,7 +358,7 @@ class TestValidation:
         data = {
             "server": {"host": "0.0.0.0", "port": 8080, "base_url": "http://x"},
             "auth": {"username": "u", "password": "p"},
-            "storage": {"download_dir": ".", "database": "db"},
+            "storage": {"download_dir": ".", "database": "db"}, "youtube": {"api_key": "test"}, "youtube": {"api_key": "test"},
             "feeds": [{"url": "http://x"}],
         }
         p = tmp_path / "bad.yaml"
@@ -370,7 +370,7 @@ class TestValidation:
         data = {
             "server": {"host": "0.0.0.0", "port": 8080, "base_url": "http://x"},
             "auth": {"username": "u", "password": "p"},
-            "storage": {"download_dir": ".", "database": "db"},
+            "storage": {"download_dir": ".", "database": "db"}, "youtube": {"api_key": "test"}, "youtube": {"api_key": "test"},
             "feeds": [{"name": "f"}],
         }
         p = tmp_path / "bad.yaml"
@@ -402,7 +402,7 @@ class TestOptionalSectionDefaults:
         data = {
             "server": {"host": "0.0.0.0", "port": 8080, "base_url": "http://x"},
             "auth": {"username": "u", "password": "p"},
-            "storage": {"download_dir": ".", "database": "db"},
+            "storage": {"download_dir": ".", "database": "db"}, "youtube": {"api_key": "test"}, "youtube": {"api_key": "test"},
             "feeds": [{"name": "f", "url": "http://x"}],
         }
         p = tmp_path / "minimal.yaml"
@@ -416,7 +416,7 @@ class TestOptionalSectionDefaults:
         data = {
             "server": {"host": "0.0.0.0", "port": 8080, "base_url": "http://x"},
             "auth": {"username": "u", "password": "p"},
-            "storage": {"download_dir": ".", "database": "db"},
+            "storage": {"download_dir": ".", "database": "db"}, "youtube": {"api_key": "test"}, "youtube": {"api_key": "test"},
             "feeds": [{"name": "f", "url": "http://x"}],
         }
         p = tmp_path / "minimal.yaml"
@@ -429,7 +429,7 @@ class TestOptionalSectionDefaults:
         data = {
             "server": {"host": "0.0.0.0", "port": 8080, "base_url": "http://x"},
             "auth": {"username": "u", "password": "p"},
-            "storage": {"download_dir": ".", "database": "db"},
+            "storage": {"download_dir": ".", "database": "db"}, "youtube": {"api_key": "test"}, "youtube": {"api_key": "test"},
             "feeds": [{"name": "f", "url": "http://x"}],
         }
         p = tmp_path / "minimal.yaml"
@@ -451,7 +451,7 @@ class TestOptionalSectionDefaults:
         data = {
             "server": {"host": "0.0.0.0", "port": 8080, "base_url": "http://x"},
             "auth": {"username": "u", "password": "p"},
-            "storage": {"download_dir": ".", "database": "db"},
+            "storage": {"download_dir": ".", "database": "db"}, "youtube": {"api_key": "test"}, "youtube": {"api_key": "test"},
             "feeds": [{"name": "f", "url": "http://x"}],
         }
         p = tmp_path / "minimal.yaml"

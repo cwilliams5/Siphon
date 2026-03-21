@@ -87,66 +87,47 @@ def _normalize_youtube_url(url: str) -> str:
 
 
 async def _check_youtube_feed(resolved, config, db) -> None:
-    """Check a YouTube feed for new episodes.
+    """Check a YouTube feed for new episodes via YouTube Data API.
 
-    Two tiers:
-    - First check (never checked): full yt-dlp extraction, no limit,
-      gets dates so date_cutoff works. Slow but one-time.
-    - Subsequent checks: YouTube RSS feed (~15 entries, fast, has dates).
+    First check: resolve channel ID, get metadata, paginate backwards
+    until date_cutoff.
+    Subsequent checks: paginate backwards until we find a known video
+    or hit date_cutoff.
     """
-    from siphon.youtube import extract_channel_id, fetch_youtube_rss
+    from siphon.youtube import get_channel_metadata, list_videos, resolve_channel_id
 
+    api_key = config.youtube.api_key
     feed_db = db.get_feed(resolved.name)
-    is_first_check = feed_db and feed_db.get("last_checked_at") is None
+    channel_id = feed_db.get("channel_id") if feed_db else None
 
-    if is_first_check:
-        await _youtube_full_check(resolved, config, db)
-    else:
-        channel_id = feed_db.get("channel_id") if feed_db else None
-        if channel_id:
-            await _youtube_rss_check(resolved, db, channel_id)
-        else:
-            # No channel_id stored — do full check to get it
-            await _youtube_full_check(resolved, config, db)
-
-
-async def _youtube_full_check(resolved, config, db) -> None:
-    """Full yt-dlp extraction — all videos with dates. First check only."""
-    from siphon.youtube import extract_channel_id
-
-    feed_url = _normalize_youtube_url(resolved.url)
-    log_activity(f"Full scan (first check, may take a minute)", feed=resolved.name)
-
-    loop = asyncio.get_event_loop()
-    metadata = await loop.run_in_executor(
-        None, extract_feed_metadata, feed_url, config.cookies,
-    )
-
-    # Store channel ID for future RSS checks
-    channel_id = extract_channel_id(metadata)
-    if channel_id:
+    # Resolve channel ID if we don't have one
+    if not channel_id:
+        log_activity("Resolving channel ID...", feed=resolved.name)
+        loop = asyncio.get_event_loop()
+        channel_id = await loop.run_in_executor(
+            None, resolve_channel_id, resolved.url, api_key,
+        )
+        if not channel_id:
+            raise Exception(f"Could not resolve channel ID for {resolved.url}")
         db.update_feed_channel_id(resolved.name, channel_id)
 
-    # Store channel thumbnail
-    thumbnails = metadata.get("thumbnails") or []
-    if thumbnails:
-        best = max(thumbnails, key=lambda t: (t.get("width") or 0) * (t.get("height") or 0))
-        image_url = best.get("url")
-        if image_url:
-            db.update_feed_image(resolved.name, image_url)
+        # Get channel metadata (thumbnail, title)
+        meta = await loop.run_in_executor(
+            None, get_channel_metadata, channel_id, api_key,
+        )
+        if meta.get("image_url"):
+            db.update_feed_image(resolved.name, meta["image_url"])
 
-    entries = metadata.get("entries") or []
-    new_count = _insert_youtube_entries(entries, resolved, db)
+    # Get known video IDs for this feed to detect where to stop
+    existing = db.get_episodes_by_feed(resolved.name)
+    known_ids = {ep["video_id"] for ep in existing}
 
-    log_activity(f"Found {new_count} new episodes (full scan, {len(entries)} total)", feed=resolved.name)
-
-
-async def _youtube_rss_check(resolved, db, channel_id: str) -> None:
-    """YouTube RSS check — fast, ~15 most recent, has dates."""
-    from siphon.youtube import fetch_youtube_rss
-
+    # Fetch videos from API — stops at cutoff date or known video
     loop = asyncio.get_event_loop()
-    entries = await loop.run_in_executor(None, fetch_youtube_rss, channel_id)
+    entries = await loop.run_in_executor(
+        None, list_videos, channel_id, api_key,
+        resolved.date_cutoff, known_ids,
+    )
 
     new_count = _insert_youtube_entries(entries, resolved, db)
 
