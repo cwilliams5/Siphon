@@ -307,7 +307,8 @@ async def add_feed_submit(
     config = request.app.state.config
     db = request.app.state.db
 
-    # Sanitize name
+    # Sanitize inputs
+    url = url.strip()
     name = _slugify(name) if name else _slugify(url.split("/")[-1])
     if not name:
         name = f"feed-{len(config.feeds)}"
