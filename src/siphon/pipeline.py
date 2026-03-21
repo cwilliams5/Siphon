@@ -67,11 +67,23 @@ async def check_feeds(config: SiphonConfig, db: Database) -> None:
                 db.update_feed_checked(feed_db["name"], error=str(exc))
 
 
+def _normalize_youtube_url(url: str) -> str:
+    """Ensure a YouTube channel URL points to the /videos tab."""
+    # Strip trailing slash
+    url = url.rstrip("/")
+    # If it's a channel URL without a tab, add /videos
+    if ("youtube.com/@" in url or "youtube.com/c/" in url or "youtube.com/channel/" in url):
+        if not any(url.endswith(f"/{tab}") for tab in ("videos", "shorts", "streams", "playlists", "community")):
+            url += "/videos"
+    return url
+
+
 async def _check_youtube_feed(resolved, config, db) -> None:
     """Check a YouTube feed for new episodes."""
+    feed_url = _normalize_youtube_url(resolved.url)
     loop = asyncio.get_event_loop()
     metadata = await loop.run_in_executor(
-        None, extract_feed_metadata, resolved.url, config.cookies
+        None, extract_feed_metadata, feed_url, config.cookies
     )
 
     entries = metadata.get("entries") or []
