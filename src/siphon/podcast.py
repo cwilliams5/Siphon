@@ -18,7 +18,10 @@ logger = logging.getLogger(__name__)
 
 def fetch_podcast_rss(url: str, timeout: int = 30) -> bytes:
     """Fetch a podcast RSS feed XML."""
-    resp = httpx.get(url, timeout=timeout, follow_redirects=True)
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    }
+    resp = httpx.get(url, timeout=timeout, follow_redirects=True, headers=headers)
     resp.raise_for_status()
     return resp.content
 
@@ -145,7 +148,10 @@ def download_podcast_audio(
     """Download a podcast audio file. Returns file size in bytes."""
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
-    with httpx.stream("GET", audio_url, timeout=timeout, follow_redirects=True) as resp:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    }
+    with httpx.stream("GET", audio_url, timeout=timeout, follow_redirects=True, headers=headers) as resp:
         resp.raise_for_status()
         total = 0
         with open(output_path, "wb") as f:

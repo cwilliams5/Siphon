@@ -150,6 +150,11 @@ class FeedConfig(BaseModel):
 
     name: str
     url: str
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def _strip_url(cls, v: object) -> str:
+        return v.strip() if isinstance(v, str) else v  # type: ignore[return-value]
     type: Literal["youtube", "podcast"] = "youtube"
 
     mode: Optional[Literal["video", "audio"]] = None
