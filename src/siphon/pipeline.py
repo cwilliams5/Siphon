@@ -342,7 +342,30 @@ async def process_downloads(config: SiphonConfig, db: Database) -> None:
                     retry_count=episode["retry_count"] + 1,
                 )
 
+    # Re-process episodes that need LLM trim (reset from error or newly enabled)
+    await _process_pending_llm(config, db)
+
     await _prune_disk(config, db)
+
+
+async def _process_pending_llm(config: SiphonConfig, db: Database) -> None:
+    """Re-process done episodes that need LLM trim (null llm_trim_status)."""
+    episodes = db.get_episodes_needing_llm(limit=3)
+    for ep in episodes:
+        feed_config = None
+        for fc in config.feeds:
+            if fc.name == ep["feed_name"]:
+                feed_config = fc
+                break
+        if feed_config is None:
+            continue
+
+        resolved = resolve_feed(feed_config, config.defaults)
+        if not resolved.llm_trim:
+            continue
+
+        if ep.get("file_path"):
+            await _run_llm_trim(ep, resolved, config, db)
 
 
 async def _download_youtube_episode(episode, resolved, config, db) -> None:

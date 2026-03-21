@@ -258,6 +258,18 @@ class Database:
         self.conn.execute(sql, params)
         self.conn.commit()
 
+    def get_episodes_needing_llm(self, limit: int = 5) -> list[dict]:
+        """Get done episodes that need LLM processing (null llm_trim_status)."""
+        rows = self.conn.execute(
+            """SELECT e.*, f.feed_type FROM episodes e
+               JOIN feeds f ON e.feed_name = f.name
+               WHERE e.status = 'done' AND e.llm_trim_status IS NULL
+                 AND e.file_path IS NOT NULL
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_disk_usage(self) -> int:
         row = self.conn.execute(
             "SELECT COALESCE(SUM(file_size), 0) AS total FROM episodes WHERE status = 'done'"
