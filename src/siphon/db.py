@@ -259,11 +259,12 @@ class Database:
         self.conn.commit()
 
     def get_episodes_needing_llm(self, limit: int = 5) -> list[dict]:
-        """Get done episodes that need LLM processing (null llm_trim_status)."""
+        """Get done episodes that need LLM processing (null or stuck pending)."""
         rows = self.conn.execute(
             """SELECT e.*, f.feed_type FROM episodes e
                JOIN feeds f ON e.feed_name = f.name
-               WHERE e.status = 'done' AND e.llm_trim_status IS NULL
+               WHERE e.status = 'done'
+                 AND (e.llm_trim_status IS NULL OR e.llm_trim_status = 'pending')
                  AND e.file_path IS NOT NULL
                LIMIT ?""",
             (limit,),

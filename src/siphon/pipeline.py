@@ -276,7 +276,8 @@ async def process_downloads(config: SiphonConfig, db: Database) -> None:
     """Download eligible episodes and prune disk when needed."""
     set_status("Processing downloads...")
 
-    _llm_processed: set = set()  # track episodes processed this cycle
+    _llm_processed: set = set()  # track episodes LLM-processed this cycle
+    _downloaded: set = set()  # track episodes downloaded this cycle
 
     promoted = db.promote_eligible_episodes()
     if promoted and promoted > 0:
@@ -316,6 +317,10 @@ async def process_downloads(config: SiphonConfig, db: Database) -> None:
                 video_id = episode["video_id"]
                 feed_name = episode["feed_name"]
                 title = episode.get("title", video_id)
+
+                if (video_id, feed_name) in _downloaded:
+                    continue
+                _downloaded.add((video_id, feed_name))
 
                 feed_config = None
                 for fc in config.feeds:
