@@ -5,8 +5,12 @@
 
 <div class="status-bar">
   <div class="stat">
-    <div class="stat-value">{{ feeds | length }}</div>
-    <div class="stat-label">Total Feeds</div>
+    <div class="stat-value">{{ feeds | selectattr('feed_type', 'equalto', 'podcast') | list | length }}</div>
+    <div class="stat-label">Podcasts</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">{{ feeds | selectattr('feed_type', 'equalto', 'youtube') | list | length }}</div>
+    <div class="stat-label">YouTube</div>
   </div>
   <div class="stat">
     <div class="stat-value">{{ disk_usage_gb }} GB</div>
