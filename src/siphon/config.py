@@ -23,10 +23,19 @@ DEFAULT_AD_PROMPT = textwrap.dedent("""\
     - App review/subscribe/like requests
     - Live show or event ticket promotions
     - Cross-promotion of other shows or networks
+    - Detailed credits or listing of all the individual contributors
     - The host's own book, course, or consulting pitch
 
-    Return ONLY a JSON file written to the output path provided. No explanation,
-    no markdown fences, just the raw JSON. Format:
+    The transcript is provided in two formats:
+    1. SEGMENTS — coarse time-stamped chunks for understanding context and flow
+    2. WORD TIMESTAMPS — per-word timing for precise cut points
+
+    Use the SEGMENTS to identify which parts of the content are ads vs real content.
+    Then use the WORD TIMESTAMPS to pick the exact start and end times for each cut.
+    Start each cut at the first word of the ad segment. End each cut at the last word
+    before real content resumes. Be precise — do not clip real content.
+
+    Return ONLY JSON. No explanation, no markdown fences. Format:
     {
       "segments": [
         {
