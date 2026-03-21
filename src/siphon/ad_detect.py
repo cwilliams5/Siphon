@@ -116,13 +116,14 @@ def detect_ads(
         "--output-format", "json",
         "--json-schema", AD_SEGMENTS_SCHEMA,
         "--effort", effort,
-        full_prompt,
     ]
 
-    logger.info("Running Claude CLI for ad detection (model=%s, effort=%s)", model, effort)
+    logger.info("Running Claude CLI for ad detection (model=%s, effort=%s, prompt_len=%d)",
+                model, effort, len(full_prompt))
 
     result = subprocess.run(
         cmd,
+        input=full_prompt,
         capture_output=True,
         text=True,
         timeout=300,  # 5 minute timeout
