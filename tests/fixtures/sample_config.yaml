@@ -2,6 +2,7 @@ server:
   host: "127.0.0.1"
   port: 8585
   base_url: "https://test.example.com"
+  media_base_url: "http://test-media.example.com:8585"
 
 auth:
   username: "testuser"

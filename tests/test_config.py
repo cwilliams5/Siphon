@@ -37,6 +37,7 @@ class TestLoadConfig:
         assert cfg.server.host == "127.0.0.1"
         assert cfg.server.port == 8585
         assert cfg.server.base_url == "https://test.example.com"
+        assert cfg.server.media_base_url == "http://test-media.example.com:8585"
 
     def test_auth_fields(self):
         cfg = load_config(str(SAMPLE_CONFIG))

@@ -73,7 +73,7 @@ testCookies();
     </div>
     <div style="display:flex; gap:8px;">
       <button class="btn btn-secondary btn-small" onclick="copyRSS('{{ feed.name }}')" title="Copy RSS URL with auth">RSS</button>
-      <a href="https://pcasts.in/feed/{{ auth_base_url.split('://')[1] }}/feed/{{ feed.name }}" class="btn btn-secondary btn-small" style="background:#f43e37;" target="_blank" title="Open in Pocket Casts">PC</a>
+      <a href="{{ feed.pc_url if feed.pc_url else 'https://pcasts.in/feed/' + auth_base_url.split('://')[1] + '/feed/' + feed.name }}" class="btn btn-secondary btn-small" style="background:#f43e37;" target="_blank" title="Open in Pocket Casts">PC</a>
       <button class="btn btn-small" onclick="toggleEdit('{{ feed.name }}')">Edit</button>
       <form method="post" action="/ui/feed-action" style="display:inline;"
             onsubmit="return confirm('Mark {{ feed.name }} as caught up? This deletes all downloaded files and sets date_cutoff to today.')">
@@ -186,6 +186,10 @@ testCookies();
       <div class="form-group">
         <label>Claude Prompt Override</label>
         <textarea name="claude_prompt_override" rows="2">{{ feed.claude_prompt_override or '' }}</textarea>
+      </div>
+      <div class="form-group">
+        <label>Pocket Casts URL</label>
+        <input type="text" name="pc_url" value="{{ feed.pc_url or '' }}" placeholder="https://pca.st/..." style="width:100%;">
       </div>
       <div style="display:flex; gap:8px; margin-top:8px;">
         <button type="submit" class="btn btn-small">Save</button>

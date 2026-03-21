@@ -77,6 +77,8 @@ def generate_feed_xml(
     *,
     display_name: str | None = None,
     image_url: str | None = None,
+    media_base_url: str | None = None,
+    sponsorblock_active: bool = False,
 ) -> str:
     """Return an RSS 2.0 XML string with iTunes extensions.
 
@@ -98,6 +100,12 @@ def generate_feed_xml(
         Explicit display name from config (takes highest priority for title).
     image_url:
         Channel-level artwork URL (e.g. from podcast RSS).
+    media_base_url:
+        Tailnet-internal base URL for enclosure URLs.  Falls back to
+        *base_url* when not provided.
+    sponsorblock_active:
+        Whether SponsorBlock is enabled for this feed (used in the
+        processing tag prepended to episode descriptions).
     """
 
     # Resolve display name: display_name > channel_name > first episode > feed_name
@@ -132,12 +140,33 @@ def generate_feed_xml(
             href=artwork_url,
         )
 
+    # Resolve media URL base: prefer explicit media_base_url, fall back to base_url
+    _media_base = media_base_url or base_url
+
     # Episodes (already ordered by upload_date DESC from the DB)
     for ep in episodes:
         item = ET.SubElement(channel, "item")
 
         _text(item, "title", ep.get("title", ""))
-        _text(item, "description", ep.get("description") or "")
+
+        # Build processing tag
+        desc_parts: list[str] = []
+        llm_cuts = ep.get("llm_cuts_applied")
+        has_llm = llm_cuts is not None and llm_cuts > 0
+        has_sb = sponsorblock_active
+        if has_llm and has_sb:
+            desc_parts.append(f"[Siphon | LLM: {llm_cuts} cuts | SB: on]")
+        elif has_llm:
+            desc_parts.append(f"[Siphon | LLM: {llm_cuts} cuts]")
+        elif has_sb:
+            desc_parts.append("[Siphon | SB: on]")
+        else:
+            desc_parts.append("[Siphon]")
+
+        original_desc = ep.get("description") or ""
+        if original_desc:
+            desc_parts.append(original_desc)
+        _text(item, "description", "\n".join(desc_parts))
 
         guid = ET.SubElement(item, "guid", isPermaLink="false")
         guid.text = ep.get("video_id", "")
@@ -146,7 +175,7 @@ def generate_feed_xml(
 
         mime = ep.get("mime_type", "video/mp4")
         ext = get_file_extension(mime)
-        enc_url = f"{base_url}/media/{feed_name}/{ep.get('video_id', '')}.{ext}"
+        enc_url = f"{_media_base}/media/{feed_name}/{ep.get('video_id', '')}.{ext}"
         ET.SubElement(
             item,
             "enclosure",

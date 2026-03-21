@@ -96,10 +96,12 @@ def create_app(config: SiphonConfig) -> FastAPI:
     from siphon.routes.api import router as api_router
     from siphon.routes.ui import router as ui_router
 
-    # RSS, media, and API routes require auth
+    # RSS and API routes require auth
     app.include_router(feeds_router, dependencies=[Depends(auth_dep)])
-    app.include_router(media_router, dependencies=[Depends(auth_dep)])
     app.include_router(api_router, dependencies=[Depends(auth_dep)])
+
+    # Media routes — Tailnet-only, no auth needed
+    app.include_router(media_router)
 
     # Web UI — localhost only, no auth needed
     app.include_router(ui_router)
@@ -129,6 +131,24 @@ def create_app(config: SiphonConfig) -> FastAPI:
         # Localhost-only for /ui/
         if request.url.path.startswith("/ui"):
             if client_ip not in ("127.0.0.1", "::1", "localhost"):
+                return Response(status_code=403, content="Forbidden")
+
+        # Tailnet-only for /media/
+        if request.url.path.startswith("/media/"):
+            import ipaddress
+            _allowed = False
+            if client_ip in ("127.0.0.1", "::1", "localhost"):
+                _allowed = True
+            else:
+                try:
+                    addr = ipaddress.ip_address(client_ip)
+                    if addr in ipaddress.ip_network("100.64.0.0/10"):
+                        _allowed = True
+                    elif isinstance(addr, ipaddress.IPv6Address) and addr.packed[:2] == b"\xfd\x7a":
+                        _allowed = True
+                except ValueError:
+                    pass
+            if not _allowed:
                 return Response(status_code=403, content="Forbidden")
 
         response = await call_next(request)

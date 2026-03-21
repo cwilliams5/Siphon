@@ -77,6 +77,7 @@ def _get_feed_display(request: Request) -> list[dict]:
             "claude_prompt_extra": resolved.claude_prompt_extra,
             "claude_prompt_override": resolved.claude_prompt_override,
             "display_name": resolved.display_name,
+            "pc_url": resolved.pc_url,
             "image_url": db_feed.get("image_url"),
             "last_checked_at": db_feed.get("last_checked_at"),
             "last_error": db_feed.get("last_error"),
@@ -227,6 +228,7 @@ async def add_feed_submit(
     claude_prompt_extra: str = Form(""),
     claude_prompt_override: str = Form(""),
     display_name: str = Form(""),
+    pc_url: str = Form(""),
 ):
     config = request.app.state.config
     db = request.app.state.db
@@ -278,6 +280,8 @@ async def add_feed_submit(
         feed_data["claude_prompt_override"] = claude_prompt_override
     if display_name:
         feed_data["display_name"] = display_name
+    if pc_url:
+        feed_data["pc_url"] = pc_url
 
     new_feed = FeedConfig(**feed_data)
     config.feeds.append(new_feed)
@@ -312,6 +316,7 @@ async def feed_action(
     claude_prompt_extra: str = Form(""),
     claude_prompt_override: str = Form(""),
     display_name: str = Form(""),
+    pc_url: str = Form(""),
     new_name: str = Form(""),
 ):
     config = request.app.state.config
@@ -323,7 +328,7 @@ async def feed_action(
             sponsorblock_categories, sponsorblock_delay_minutes,
             force_keyframes_at_cuts, block_shorts, min_duration_seconds,
             llm_trim, date_cutoff, title_exclude, claude_prompt_extra,
-            claude_prompt_override, display_name,
+            claude_prompt_override, display_name, pc_url,
         )
     elif action == "rename":
         return _do_rename(config, db, feed_name, new_name)
@@ -339,7 +344,7 @@ def _do_update(config, feed_name, mode, quality, sponsorblock,
                sponsorblock_categories, sponsorblock_delay_minutes,
                force_keyframes_at_cuts, block_shorts, min_duration_seconds,
                llm_trim, date_cutoff, title_exclude, claude_prompt_extra,
-               claude_prompt_override, display_name):
+               claude_prompt_override, display_name, pc_url=""):
     for i, fc in enumerate(config.feeds):
         if fc.name == feed_name:
             update = {
@@ -363,6 +368,7 @@ def _do_update(config, feed_name, mode, quality, sponsorblock,
                 "claude_prompt_extra": claude_prompt_extra if claude_prompt_extra else None,
                 "claude_prompt_override": claude_prompt_override if claude_prompt_override else None,
                 "display_name": display_name if display_name else None,
+                "pc_url": pc_url if pc_url else None,
             }
             config.feeds[i] = FeedConfig(**update)
             break

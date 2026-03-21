@@ -47,6 +47,7 @@ class ServerConfig(BaseModel):
     host: str
     port: int
     base_url: str
+    media_base_url: str = ""
 
 
 class AuthConfig(BaseModel):
@@ -161,6 +162,9 @@ class FeedConfig(BaseModel):
     # Display name for RSS/UI (not in FeedDefaults)
     display_name: Optional[str] = None
 
+    # Pocket Casts private URL (not in FeedDefaults)
+    pc_url: Optional[str] = None
+
     @field_validator("quality", mode="before")
     @classmethod
     def _validate_quality(cls, v: object) -> Quality | None:
@@ -201,6 +205,9 @@ class ResolvedFeed(BaseModel):
     # Display name for RSS/UI (no default fallback)
     display_name: str | None = None
 
+    # Pocket Casts private URL (no default fallback)
+    pc_url: str | None = None
+
 
 class SiphonConfig(BaseModel):
     server: ServerConfig
@@ -230,6 +237,7 @@ def resolve_feed(feed: FeedConfig, defaults: FeedDefaults) -> ResolvedFeed:
     merged["claude_prompt_extra"] = feed.claude_prompt_extra
     merged["claude_prompt_override"] = feed.claude_prompt_override
     merged["display_name"] = feed.display_name
+    merged["pc_url"] = feed.pc_url
     return ResolvedFeed(**merged)
 
 
