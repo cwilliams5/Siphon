@@ -25,17 +25,6 @@
   </form>
 </div>
 
-<div class="card" style="padding:12px;">
-  <div style="display:flex; gap:24px; flex-wrap:wrap; font-size:0.9em;">
-    <span>YouTube: {{ status.youtube_downloads_this_hour }}/{{ status.youtube_downloads_max }} this hour</span>
-    <span>Podcast: {{ status.podcast_downloads_this_hour }}/{{ status.podcast_downloads_max }} this hour</span>
-    <span>Downloading: {{ status.downloading_count }}</span>
-    <span>Ready: {{ status.eligible_count }}</span>
-    <span>Pending: {{ status.pending_count }}</span>
-    <span>Done: {{ status.done_count }}</span>
-    <span>LLM Queue: {{ status.llm_processing }}</span>
-  </div>
-</div>
 
 <script>
 async function testCookies() {
@@ -85,7 +74,9 @@ testCookies();
     </div>
     <div style="display:flex; gap:8px;">
       <button class="btn btn-secondary btn-small" onclick="copyRSS('{{ feed.name }}')" title="Copy RSS URL with auth">RSS</button>
-      <a href="{{ feed.pc_url if feed.pc_url else 'https://pcasts.in/feed/' + auth_base_url.split('://')[1] + '/feed/' + feed.name }}" class="btn btn-secondary btn-small" style="background:#f43e37;" target="_blank" title="Open in Pocket Casts">PC</a>
+      {% if feed.pc_url %}
+      <a href="{{ feed.pc_url }}" class="btn btn-secondary btn-small" style="background:#f43e37;" target="_blank" title="Open in Pocket Casts">PC</a>
+      {% endif %}
       <button class="btn btn-small" onclick="toggleEdit('{{ feed.name }}')">Edit</button>
       <form method="post" action="/ui/feed-action" style="display:inline;"
             onsubmit="return confirm('Mark {{ feed.name }} as caught up? This deletes all downloaded files and sets date_cutoff to today.')">

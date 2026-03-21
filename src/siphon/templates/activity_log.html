@@ -4,18 +4,33 @@
   <meta charset="utf-8">
   <meta http-equiv="refresh" content="5">
   <style>
-    body { font-family: monospace; font-size: 0.85em; background: #16213e; color: #888;
-           margin: 0; padding: 8px 12px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+           font-size: 0.85em; background: #16213e; color: #888; margin: 0; padding: 0; }
+    .status-bar { display: flex; gap: 16px; flex-wrap: wrap; padding: 8px 12px;
+                  border-bottom: 1px solid #333; font-size: 0.95em; }
+    .status-bar span { white-space: nowrap; }
+    .log { font-family: monospace; padding: 8px 12px; }
     .error { color: #e74c3c; }
     .warning { color: #f39c12; }
   </style>
 </head>
 <body>
+<div class="status-bar">
+  <span>YT: {{ status.youtube_downloads_this_hour }}/{{ status.youtube_downloads_max }}/hr</span>
+  <span>Pod: {{ status.podcast_downloads_this_hour }}/{{ status.podcast_downloads_max }}/hr</span>
+  <span>Downloading: {{ status.downloading_count }}</span>
+  <span>Ready: {{ status.eligible_count }}</span>
+  <span>Pending: {{ status.pending_count }}</span>
+  <span>Done: {{ status.done_count }}</span>
+  <span>LLM Queue: {{ status.llm_processing }}</span>
+</div>
+<div class="log">
 {% for entry in activity_log %}
 <div class="{{ entry.level }}">{{ entry.time }} {% if entry.feed %}[{{ entry.feed }}]{% endif %} {{ entry.message }}</div>
 {% endfor %}
 {% if not activity_log %}
 <div style="color:#666;">No activity yet. Hit "Check Feeds Now" to start.</div>
 {% endif %}
+</div>
 </body>
 </html>

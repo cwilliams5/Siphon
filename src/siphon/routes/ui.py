@@ -149,9 +149,12 @@ async def activity_log(request: Request):
 @router.get("/activity-log", response_class=HTMLResponse)
 async def activity_log_page(request: Request):
     from siphon.activity import get_recent
+    config = request.app.state.config
+    db = request.app.state.db
     return templates.TemplateResponse("activity_log.html", {
         "request": request,
         "activity_log": get_recent(50),
+        "status": _get_system_status(config, db),
     })
 
 
