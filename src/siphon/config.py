@@ -93,6 +93,7 @@ class ScheduleConfig(BaseModel):
 
 class YouTubeConfig(BaseModel):
     api_key: str
+    quota_cooldown_hours: int = 4
 
 
 class CookiesConfig(BaseModel):

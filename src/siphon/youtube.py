@@ -4,23 +4,63 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
+from datetime import datetime, timedelta, timezone
 
 import httpx
 
 logger = logging.getLogger(__name__)
 
-SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels"
+PLAYLIST_ITEMS_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
+
+# Cooldown state — shared across all API calls
+_cooldown_until: datetime | None = None
+_cooldown_lock = threading.Lock()
 
 
-def resolve_channel_id(url: str, api_key: str) -> str | None:
+class YouTubeQuotaExceeded(Exception):
+    """Raised when the YouTube API returns 403 (quota exceeded) or we're in cooldown."""
+    pass
+
+
+def _check_cooldown() -> None:
+    """Raise if we're in cooldown period."""
+    with _cooldown_lock:
+        if _cooldown_until and datetime.now(timezone.utc) < _cooldown_until:
+            remaining = (_cooldown_until - datetime.now(timezone.utc)).total_seconds() / 3600
+            raise YouTubeQuotaExceeded(
+                f"YouTube API cooling down ({remaining:.1f}h remaining)"
+            )
+
+
+def _set_cooldown(hours: int) -> None:
+    """Enter cooldown for the specified number of hours."""
+    global _cooldown_until
+    with _cooldown_lock:
+        _cooldown_until = datetime.now(timezone.utc) + timedelta(hours=hours)
+    logger.warning("YouTube API cooldown activated for %d hours", hours)
+
+
+def _api_get(url: str, params: dict, cooldown_hours: int = 4) -> dict:
+    """Make an API GET request with cooldown handling."""
+    _check_cooldown()
+    resp = httpx.get(url, params=params, timeout=15)
+    if resp.status_code == 403:
+        _set_cooldown(cooldown_hours)
+        raise YouTubeQuotaExceeded(f"YouTube API 403: {resp.text[:200]}")
+    resp.raise_for_status()
+    return resp.json()
+
+
+def resolve_channel_id(url: str, api_key: str, cooldown_hours: int = 4) -> str | None:
     """Resolve a YouTube channel URL to a channel ID via the API."""
     # If URL already contains a channel ID
     match = re.search(r"youtube\.com/channel/(UC[\w-]+)", url)
     if match:
         return match.group(1)
 
-    # Extract handle or custom URL name
+    # Extract handle
     handle = None
     match = re.search(r"youtube\.com/@([\w-]+)", url)
     if match:
@@ -31,33 +71,30 @@ def resolve_channel_id(url: str, api_key: str) -> str | None:
             handle = match.group(1)
 
     if handle:
-        resp = httpx.get(CHANNELS_URL, params={
+        data = _api_get(CHANNELS_URL, {
             "key": api_key,
             "forHandle": handle,
             "part": "id",
-        }, timeout=10)
-        if resp.status_code == 200:
-            items = resp.json().get("items", [])
-            if items:
-                return items[0]["id"]
+        }, cooldown_hours)
+        items = data.get("items", [])
+        if items:
+            return items[0]["id"]
 
     return None
 
 
-def get_channel_metadata(channel_id: str, api_key: str) -> dict:
-    """Get channel title and thumbnail."""
-    resp = httpx.get(CHANNELS_URL, params={
+def get_channel_metadata(channel_id: str, api_key: str, cooldown_hours: int = 4) -> dict:
+    """Get channel title and thumbnail. Cost: 1 unit."""
+    data = _api_get(CHANNELS_URL, {
         "key": api_key,
         "id": channel_id,
         "part": "snippet",
-    }, timeout=10)
-    resp.raise_for_status()
-    items = resp.json().get("items", [])
+    }, cooldown_hours)
+    items = data.get("items", [])
     if not items:
         return {}
     snippet = items[0]["snippet"]
     thumbnails = snippet.get("thumbnails", {})
-    # Pick the best thumbnail
     best_thumb = None
     for size in ("high", "medium", "default"):
         if size in thumbnails:
@@ -74,23 +111,26 @@ def list_videos(
     api_key: str,
     date_cutoff: str | None = None,
     known_ids: set[str] | None = None,
-    max_pages: int = 100,
+    max_pages: int = 200,
+    cooldown_hours: int = 4,
 ) -> list[dict]:
-    """List videos from a channel, newest first, stopping at cutoff or known video.
+    """List videos from a channel using playlistItems (1 unit per 50 videos).
 
-    Args:
-        channel_id: YouTube channel ID
-        api_key: YouTube Data API key
-        date_cutoff: YYYYMMDD string — stop paginating when we pass this date
-        known_ids: set of video IDs already in our DB — stop when we hit one
-        max_pages: safety limit on pagination
+    Uses the channel's "uploads" playlist (UC... -> UU...) which contains
+    all videos in reverse chronological order with dates.
 
-    Returns list of dicts with: id, title, upload_date (YYYYMMDD), description, thumbnail
+    Paginates backwards, stopping at date_cutoff or a known video ID.
     """
     known_ids = known_ids or set()
+
+    # Convert channel ID to uploads playlist ID: UC... -> UU...
+    if channel_id.startswith("UC"):
+        uploads_playlist = "UU" + channel_id[2:]
+    else:
+        uploads_playlist = channel_id
+
     cutoff_iso = None
     if date_cutoff:
-        # Convert YYYYMMDD to ISO for comparison
         cutoff_iso = f"{date_cutoff[:4]}-{date_cutoff[4:6]}-{date_cutoff[6:8]}T00:00:00Z"
 
     videos = []
@@ -99,18 +139,14 @@ def list_videos(
     for page_num in range(max_pages):
         params = {
             "key": api_key,
-            "channelId": channel_id,
+            "playlistId": uploads_playlist,
             "part": "snippet",
-            "order": "date",
-            "type": "video",
             "maxResults": 50,
         }
         if page_token:
             params["pageToken"] = page_token
 
-        resp = httpx.get(SEARCH_URL, params=params, timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
+        data = _api_get(PLAYLIST_ITEMS_URL, params, cooldown_hours)
 
         items = data.get("items", [])
         if not items:
@@ -120,8 +156,12 @@ def list_videos(
         hit_cutoff = False
 
         for item in items:
-            video_id = item["id"]["videoId"]
-            snippet = item["snippet"]
+            snippet = item.get("snippet", {})
+            resource = snippet.get("resourceId", {})
+            video_id = resource.get("videoId")
+            if not video_id:
+                continue
+
             published = snippet.get("publishedAt", "")
             upload_date = published[:10].replace("-", "") if published else None
 
@@ -151,7 +191,7 @@ def list_videos(
                 "thumbnail": thumb_url,
                 "url": f"https://www.youtube.com/watch?v={video_id}",
                 "channel": snippet.get("channelTitle", ""),
-                "duration": None,  # Not available from search endpoint
+                "duration": None,
             })
 
         if hit_known or hit_cutoff:
@@ -161,7 +201,6 @@ def list_videos(
         if not page_token:
             break
 
-        logger.debug("YouTube API page %d: %d videos so far", page_num + 1, len(videos))
-
-    logger.info("YouTube API: %d videos from channel %s", len(videos), channel_id)
+    logger.info("YouTube API: %d videos from channel %s (%d pages)",
+                len(videos), channel_id, page_num + 1)
     return videos

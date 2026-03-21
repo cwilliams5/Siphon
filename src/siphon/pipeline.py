@@ -67,6 +67,10 @@ async def check_feeds(config: SiphonConfig, db: Database) -> None:
                 db.update_feed_checked(feed_db["name"])
 
             except Exception as exc:
+                from siphon.youtube import YouTubeQuotaExceeded
+                if isinstance(exc, YouTubeQuotaExceeded):
+                    log_activity(str(exc), level="warning")
+                    break  # Stop checking YouTube feeds entirely
                 logger.error("Error checking feed %s: %s", feed_db["name"], exc)
                 db.update_feed_checked(feed_db["name"], error=str(exc))
 
@@ -95,6 +99,7 @@ async def _check_youtube_feed(resolved, config, db) -> None:
     from siphon.youtube import get_channel_metadata, list_videos, resolve_channel_id
 
     api_key = config.youtube.api_key
+    cooldown_hours = config.youtube.quota_cooldown_hours
     feed_db = db.get_feed(resolved.name)
     channel_id = feed_db.get("channel_id") if feed_db else None
 
@@ -103,7 +108,7 @@ async def _check_youtube_feed(resolved, config, db) -> None:
         log_activity("Resolving channel ID...", feed=resolved.name)
         loop = asyncio.get_event_loop()
         channel_id = await loop.run_in_executor(
-            None, resolve_channel_id, resolved.url, api_key,
+            None, resolve_channel_id, resolved.url, api_key, cooldown_hours,
         )
         if not channel_id:
             raise Exception(f"Could not resolve channel ID for {resolved.url}")
@@ -111,7 +116,7 @@ async def _check_youtube_feed(resolved, config, db) -> None:
 
         # Get channel metadata (thumbnail, title)
         meta = await loop.run_in_executor(
-            None, get_channel_metadata, channel_id, api_key,
+            None, get_channel_metadata, channel_id, api_key, cooldown_hours,
         )
         if meta.get("image_url"):
             db.update_feed_image(resolved.name, meta["image_url"])
@@ -124,7 +129,7 @@ async def _check_youtube_feed(resolved, config, db) -> None:
     loop = asyncio.get_event_loop()
     entries = await loop.run_in_executor(
         None, list_videos, channel_id, api_key,
-        resolved.date_cutoff, known_ids,
+        resolved.date_cutoff, known_ids, 200, cooldown_hours,
     )
 
     new_count = _insert_youtube_entries(entries, resolved, db)
