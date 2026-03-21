@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS feeds (
     last_checked_at TEXT,
     last_error      TEXT,
     image_url       TEXT,
+    channel_id      TEXT,
     created_at      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -57,6 +58,8 @@ MIGRATIONS = [
     "ALTER TABLE feeds ADD COLUMN image_url TEXT",
     # Add sb_cuts_applied column for SponsorBlock segment counts
     "ALTER TABLE episodes ADD COLUMN sb_cuts_applied INTEGER",
+    # Add channel_id for YouTube RSS feed lookups
+    "ALTER TABLE feeds ADD COLUMN channel_id TEXT",
 ]
 
 
@@ -105,6 +108,14 @@ class Database:
                feed_type = excluded.feed_type,
                image_url = COALESCE(excluded.image_url, feeds.image_url)""",
             (name, url, feed_type, image_url),
+        )
+        self.conn.commit()
+
+    def update_feed_channel_id(self, name: str, channel_id: str) -> None:
+        """Store the YouTube channel ID for RSS lookups."""
+        self.conn.execute(
+            "UPDATE feeds SET channel_id = ? WHERE name = ?",
+            (channel_id, name),
         )
         self.conn.commit()
 

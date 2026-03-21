@@ -87,33 +87,76 @@ def _normalize_youtube_url(url: str) -> str:
 
 
 async def _check_youtube_feed(resolved, config, db) -> None:
-    """Check a YouTube feed for new episodes."""
-    feed_url = _normalize_youtube_url(resolved.url)
+    """Check a YouTube feed for new episodes.
 
-    # Only fetch recent videos — no need to scan the entire channel history.
+    Two tiers:
+    - First check (never checked): full yt-dlp extraction, no limit,
+      gets dates so date_cutoff works. Slow but one-time.
+    - Subsequent checks: YouTube RSS feed (~15 entries, fast, has dates).
+    """
+    from siphon.youtube import extract_channel_id, fetch_youtube_rss
+
     feed_db = db.get_feed(resolved.name)
-    if feed_db and feed_db.get("last_checked_at") is None:
-        max_entries = config.schedule.youtube_initial_backfill
+    is_first_check = feed_db and feed_db.get("last_checked_at") is None
+
+    if is_first_check:
+        await _youtube_full_check(resolved, config, db)
     else:
-        max_entries = config.schedule.youtube_check_limit
+        channel_id = feed_db.get("channel_id") if feed_db else None
+        if channel_id:
+            await _youtube_rss_check(resolved, db, channel_id)
+        else:
+            # No channel_id stored — do full check to get it
+            await _youtube_full_check(resolved, config, db)
+
+
+async def _youtube_full_check(resolved, config, db) -> None:
+    """Full yt-dlp extraction — all videos with dates. First check only."""
+    from siphon.youtube import extract_channel_id
+
+    feed_url = _normalize_youtube_url(resolved.url)
+    log_activity(f"Full scan (first check, may take a minute)", feed=resolved.name)
 
     loop = asyncio.get_event_loop()
     metadata = await loop.run_in_executor(
-        None, extract_feed_metadata, feed_url, config.cookies, max_entries
+        None, extract_feed_metadata, feed_url, config.cookies,
     )
 
-    # Store channel thumbnail as feed artwork
+    # Store channel ID for future RSS checks
+    channel_id = extract_channel_id(metadata)
+    if channel_id:
+        db.update_feed_channel_id(resolved.name, channel_id)
+
+    # Store channel thumbnail
     thumbnails = metadata.get("thumbnails") or []
     if thumbnails:
-        # Pick the largest thumbnail
         best = max(thumbnails, key=lambda t: (t.get("width") or 0) * (t.get("height") or 0))
         image_url = best.get("url")
         if image_url:
             db.update_feed_image(resolved.name, image_url)
 
     entries = metadata.get("entries") or []
-    new_count = 0
+    new_count = _insert_youtube_entries(entries, resolved, db)
 
+    log_activity(f"Found {new_count} new episodes (full scan, {len(entries)} total)", feed=resolved.name)
+
+
+async def _youtube_rss_check(resolved, db, channel_id: str) -> None:
+    """YouTube RSS check — fast, ~15 most recent, has dates."""
+    from siphon.youtube import fetch_youtube_rss
+
+    loop = asyncio.get_event_loop()
+    entries = await loop.run_in_executor(None, fetch_youtube_rss, channel_id)
+
+    new_count = _insert_youtube_entries(entries, resolved, db)
+
+    if new_count > 0:
+        log_activity(f"Found {new_count} new episodes", feed=resolved.name)
+
+
+def _insert_youtube_entries(entries: list, resolved, db) -> int:
+    """Insert YouTube entries into DB with filters. Returns new episode count."""
+    new_count = 0
     for entry in entries:
         video_id = entry["id"]
 
@@ -162,9 +205,7 @@ async def _check_youtube_feed(resolved, config, db) -> None:
             )
             new_count += 1
 
-    if new_count > 0:
-        log_activity(f"Found {new_count} new episodes", feed=resolved.name)
-    logger.info("Checked YouTube feed %s: %d entries", resolved.name, len(entries))
+    return new_count
 
 
 async def _check_podcast_feed(resolved, db) -> None:
