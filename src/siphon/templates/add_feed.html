@@ -61,14 +61,6 @@
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>Force Keyframes at Cuts</label>
-        <select name="force_keyframes_at_cuts">
-          <option value="" {% if not prefill.force_keyframes_at_cuts %}selected{% endif %}>Default</option>
-          <option value="true" {% if prefill.force_keyframes_at_cuts == 'true' %}selected{% endif %}>On</option>
-          <option value="false" {% if prefill.force_keyframes_at_cuts == 'false' %}selected{% endif %}>Off</option>
-        </select>
-      </div>
-      <div class="form-group">
         <label>Block Shorts</label>
         <select name="block_shorts">
           <option value="" {% if not prefill.block_shorts %}selected{% endif %}>Default</option>

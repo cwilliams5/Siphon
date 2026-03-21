@@ -142,13 +142,6 @@ testCookies();
           <label>SponsorBlock Delay (min)</label>
           <input type="number" name="sponsorblock_delay_minutes" value="{{ feed.sponsorblock_delay_minutes }}">
         </div>
-        <div class="form-group">
-          <label>Force Keyframes at Cuts</label>
-          <select name="force_keyframes_at_cuts">
-            <option value="true" {% if feed.force_keyframes_at_cuts %}selected{% endif %}>On</option>
-            <option value="false" {% if not feed.force_keyframes_at_cuts %}selected{% endif %}>Off</option>
-          </select>
-        </div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -162,7 +155,6 @@ testCookies();
       <input type="hidden" name="sponsorblock" value="{{ feed.sponsorblock }}">
       <input type="hidden" name="sponsorblock_categories" value="{{ feed.sponsorblock_categories | join(', ') }}">
       <input type="hidden" name="sponsorblock_delay_minutes" value="{{ feed.sponsorblock_delay_minutes }}">
-      <input type="hidden" name="force_keyframes_at_cuts" value="{{ feed.force_keyframes_at_cuts }}">
       <input type="hidden" name="block_shorts" value="{{ feed.block_shorts }}">
       <div class="form-row">
       {% endif %}

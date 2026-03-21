@@ -343,9 +343,20 @@ async def _download_youtube_episode(episode, resolved, config, db) -> None:
     if result is not None:
         path, size = result
         mime = "audio/mpeg" if resolved.mode == "audio" else "video/mp4"
+
+        # Query SponsorBlock for segment count if enabled
+        sb_cuts: int | None = None
+        if resolved.sponsorblock:
+            from siphon.sponsorblock import get_segment_count
+            sb_cuts = await loop.run_in_executor(
+                None, get_segment_count, video_id, resolved.sponsorblock_categories,
+            )
+            logger.info("SponsorBlock segments for %s: %d", video_id, sb_cuts)
+
         db.update_episode_status(
             video_id, feed_name, "done",
             file_path=path, file_size=size, mime_type=mime,
+            **({"sb_cuts_applied": sb_cuts} if sb_cuts is not None else {}),
         )
         logger.info("Downloaded YouTube %s for feed %s", video_id, feed_name)
     else:

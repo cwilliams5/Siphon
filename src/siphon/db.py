@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS episodes (
     llm_trim_status TEXT,
     llm_segments_json TEXT,
     llm_cuts_applied INTEGER,
+    sb_cuts_applied INTEGER,
     updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (video_id, feed_name)
 );
@@ -54,6 +55,8 @@ MIGRATIONS = [
     "ALTER TABLE episodes ADD COLUMN llm_cuts_applied INTEGER",
     # Add image_url column for podcast artwork
     "ALTER TABLE feeds ADD COLUMN image_url TEXT",
+    # Add sb_cuts_applied column for SponsorBlock segment counts
+    "ALTER TABLE episodes ADD COLUMN sb_cuts_applied INTEGER",
 ]
 
 

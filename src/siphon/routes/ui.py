@@ -68,7 +68,6 @@ def _get_feed_display(request: Request) -> list[dict]:
             "sponsorblock": resolved.sponsorblock,
             "sponsorblock_categories": resolved.sponsorblock_categories,
             "sponsorblock_delay_minutes": resolved.sponsorblock_delay_minutes,
-            "force_keyframes_at_cuts": resolved.force_keyframes_at_cuts,
             "block_shorts": resolved.block_shorts,
             "min_duration_seconds": resolved.min_duration_seconds,
             "date_cutoff": resolved.date_cutoff,
@@ -219,7 +218,6 @@ async def add_feed_submit(
     sponsorblock: str = Form(""),
     sponsorblock_categories: str = Form(""),
     sponsorblock_delay_minutes: str = Form(""),
-    force_keyframes_at_cuts: str = Form(""),
     block_shorts: str = Form(""),
     min_duration_seconds: str = Form(""),
     llm_trim: str = Form(""),
@@ -262,8 +260,6 @@ async def add_feed_submit(
         ]
     if sponsorblock_delay_minutes:
         feed_data["sponsorblock_delay_minutes"] = int(sponsorblock_delay_minutes)
-    if force_keyframes_at_cuts:
-        feed_data["force_keyframes_at_cuts"] = force_keyframes_at_cuts == "true"
     if block_shorts:
         feed_data["block_shorts"] = block_shorts == "true"
     if min_duration_seconds:
@@ -307,7 +303,6 @@ async def feed_action(
     sponsorblock: str = Form("true"),
     sponsorblock_categories: str = Form(""),
     sponsorblock_delay_minutes: int = Form(4320),
-    force_keyframes_at_cuts: str = Form("true"),
     block_shorts: str = Form("true"),
     min_duration_seconds: int = Form(60),
     llm_trim: str = Form("false"),
@@ -326,7 +321,7 @@ async def feed_action(
         return _do_update(
             config, feed_name, mode, quality, sponsorblock,
             sponsorblock_categories, sponsorblock_delay_minutes,
-            force_keyframes_at_cuts, block_shorts, min_duration_seconds,
+            block_shorts, min_duration_seconds,
             llm_trim, date_cutoff, title_exclude, claude_prompt_extra,
             claude_prompt_override, display_name, pc_url,
         )
@@ -342,7 +337,7 @@ async def feed_action(
 
 def _do_update(config, feed_name, mode, quality, sponsorblock,
                sponsorblock_categories, sponsorblock_delay_minutes,
-               force_keyframes_at_cuts, block_shorts, min_duration_seconds,
+               block_shorts, min_duration_seconds,
                llm_trim, date_cutoff, title_exclude, claude_prompt_extra,
                claude_prompt_override, display_name, pc_url=""):
     for i, fc in enumerate(config.feeds):
@@ -359,7 +354,6 @@ def _do_update(config, feed_name, mode, quality, sponsorblock,
                     if sponsorblock_categories else []
                 ),
                 "sponsorblock_delay_minutes": sponsorblock_delay_minutes,
-                "force_keyframes_at_cuts": force_keyframes_at_cuts == "true",
                 "block_shorts": block_shorts == "true",
                 "min_duration_seconds": min_duration_seconds,
                 "llm_trim": llm_trim == "true",

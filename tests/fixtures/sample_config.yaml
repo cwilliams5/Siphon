@@ -40,7 +40,6 @@ defaults:
     - sponsor
     - selfpromo
   sponsorblock_delay_minutes: 0
-  force_keyframes_at_cuts: true
   block_shorts: true
   min_duration_seconds: 60
   date_cutoff: null

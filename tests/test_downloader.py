@@ -37,7 +37,7 @@ def video_feed() -> ResolvedFeed:
         sponsorblock=False,
         sponsorblock_categories=["sponsor"],
         sponsorblock_delay_minutes=4320,
-        force_keyframes_at_cuts=True,
+
         block_shorts=True,
         min_duration_seconds=60,
         date_cutoff=None,
@@ -57,7 +57,7 @@ def audio_feed() -> ResolvedFeed:
         sponsorblock=False,
         sponsorblock_categories=["sponsor"],
         sponsorblock_delay_minutes=4320,
-        force_keyframes_at_cuts=True,
+
         block_shorts=True,
         min_duration_seconds=60,
         date_cutoff=None,
@@ -77,7 +77,7 @@ def sponsorblock_feed() -> ResolvedFeed:
         sponsorblock=True,
         sponsorblock_categories=["sponsor", "selfpromo"],
         sponsorblock_delay_minutes=4320,
-        force_keyframes_at_cuts=True,
+
         block_shorts=True,
         min_duration_seconds=60,
         date_cutoff=None,
@@ -97,7 +97,7 @@ def max_quality_feed() -> ResolvedFeed:
         sponsorblock=False,
         sponsorblock_categories=["sponsor"],
         sponsorblock_delay_minutes=4320,
-        force_keyframes_at_cuts=True,
+
         block_shorts=True,
         min_duration_seconds=60,
         date_cutoff=None,
@@ -220,7 +220,7 @@ class TestBuildDownloadOptsSponsorblock:
             if pp["key"] == "ModifyChapters"
         )
         assert mc["remove_sponsor_segments"] == ["sponsor", "selfpromo"]
-        assert mc["force_keyframes"] is True
+        assert mc["force_keyframes"] is False
 
     def test_sponsorblock_disabled(
         self, video_feed: ResolvedFeed, cookies: CookiesConfig

@@ -89,6 +89,12 @@ class TestSchema:
         assert ep["llm_segments_json"] is None
         assert ep["llm_cuts_applied"] is None
 
+    def test_sb_cuts_applied_column_exists(self, db: Database):
+        _add_feed(db)
+        _add_episode(db)
+        ep = db.get_episode("v1", "tech")
+        assert ep["sb_cuts_applied"] is None
+
 
 # ------------------------------------------------------------------ #
 # Feeds

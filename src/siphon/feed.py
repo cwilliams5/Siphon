@@ -91,6 +91,8 @@ def generate_feed_xml(
         ``video_id``, ``feed_name``, ``title``, ``description``,
         ``thumbnail_url``, ``channel_name``, ``duration``,
         ``upload_date``, ``file_path``, ``file_size``, ``mime_type``.
+        Optional: ``sb_cuts_applied`` (int or None),
+        ``llm_cuts_applied`` (int or None).
     base_url:
         Server base URL for constructing media URLs.
     channel_name:
@@ -152,14 +154,20 @@ def generate_feed_xml(
         # Build processing tag
         desc_parts: list[str] = []
         llm_cuts = ep.get("llm_cuts_applied")
-        has_llm = llm_cuts is not None and llm_cuts > 0
-        has_sb = sponsorblock_active
+        sb_cuts = ep.get("sb_cuts_applied")
+        has_llm = llm_cuts is not None
+        has_sb = sb_cuts is not None or sponsorblock_active
+
         if has_llm and has_sb:
-            desc_parts.append(f"[Siphon | LLM: {llm_cuts} cuts | SB: on]")
-        elif has_llm:
-            desc_parts.append(f"[Siphon | LLM: {llm_cuts} cuts]")
+            sb_val = sb_cuts if sb_cuts is not None else 0
+            llm_val = llm_cuts if llm_cuts is not None else 0
+            desc_parts.append(f"[Siphon | LLM: {llm_val} cuts | SB: {sb_val} cuts]")
         elif has_sb:
-            desc_parts.append("[Siphon | SB: on]")
+            sb_val = sb_cuts if sb_cuts is not None else 0
+            desc_parts.append(f"[Siphon | SB: {sb_val} cuts]")
+        elif has_llm:
+            llm_val = llm_cuts if llm_cuts is not None else 0
+            desc_parts.append(f"[Siphon | LLM: {llm_val} cuts]")
         else:
             desc_parts.append("[Siphon]")
 

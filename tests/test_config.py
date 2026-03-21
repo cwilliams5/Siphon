@@ -76,7 +76,6 @@ class TestLoadConfig:
         assert cfg.defaults.sponsorblock is True
         assert cfg.defaults.sponsorblock_categories == ["sponsor", "selfpromo"]
         assert cfg.defaults.sponsorblock_delay_minutes == 0
-        assert cfg.defaults.force_keyframes_at_cuts is True
         assert cfg.defaults.block_shorts is True
         assert cfg.defaults.min_duration_seconds == 60
         assert cfg.defaults.date_cutoff is None
@@ -184,7 +183,6 @@ class TestResolveFeed:
         assert resolved.mode == "video"
         assert resolved.sponsorblock is True
         assert resolved.sponsorblock_delay_minutes == 4320
-        assert resolved.force_keyframes_at_cuts is True
         assert resolved.block_shorts is True
         assert resolved.min_duration_seconds == 60
         assert resolved.date_cutoff is None
@@ -275,7 +273,6 @@ class TestResolveFeed:
             sponsorblock=False,
             sponsorblock_categories=["sponsor"],
             sponsorblock_delay_minutes=0,
-            force_keyframes_at_cuts=False,
             block_shorts=False,
             min_duration_seconds=0,
             date_cutoff="20230101",
@@ -288,7 +285,6 @@ class TestResolveFeed:
         assert resolved.sponsorblock is False
         assert resolved.sponsorblock_categories == ["sponsor"]
         assert resolved.sponsorblock_delay_minutes == 0
-        assert resolved.force_keyframes_at_cuts is False
         assert resolved.block_shorts is False
         assert resolved.min_duration_seconds == 0
         assert resolved.date_cutoff == "20230101"

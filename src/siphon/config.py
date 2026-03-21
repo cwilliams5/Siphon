@@ -114,7 +114,6 @@ class FeedDefaults(BaseModel):
         "outro",
     ]
     sponsorblock_delay_minutes: int = 4320
-    force_keyframes_at_cuts: bool = True
     block_shorts: bool = True
     min_duration_seconds: int = 60
     date_cutoff: str | None = None
@@ -148,7 +147,6 @@ class FeedConfig(BaseModel):
     sponsorblock: Optional[bool] = None
     sponsorblock_categories: Optional[list[str]] = None
     sponsorblock_delay_minutes: Optional[int] = None
-    force_keyframes_at_cuts: Optional[bool] = None
     block_shorts: Optional[bool] = None
     min_duration_seconds: Optional[int] = None
     date_cutoff: Optional[str] = None
@@ -191,7 +189,6 @@ class ResolvedFeed(BaseModel):
     sponsorblock: bool
     sponsorblock_categories: list[str]
     sponsorblock_delay_minutes: int
-    force_keyframes_at_cuts: bool
     block_shorts: bool
     min_duration_seconds: int
     date_cutoff: str | None
