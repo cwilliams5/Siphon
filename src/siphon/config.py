@@ -57,6 +57,7 @@ class ServerConfig(BaseModel):
     port: int
     base_url: str
     media_base_url: str = ""
+    timezone: str = "America/Los_Angeles"
 
 
 class AuthConfig(BaseModel):
@@ -110,6 +111,7 @@ class LLMConfig(BaseModel):
     confidence_threshold: float = 0.75
     min_segment_duration: int = 7
     max_segment_duration: int = 300
+    claude_concurrency: int = 3
 
 
 class FeedDefaults(BaseModel):

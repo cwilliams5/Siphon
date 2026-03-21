@@ -1,7 +1,7 @@
 """Pipeline orchestration for Siphon.
 
-Coordinates the two main scheduled jobs – feed checking and episode
-downloading – wiring together the *db*, *downloader*, *filters*,
+Coordinates the two main scheduled jobs -- feed checking and episode
+downloading -- wiring together the *db*, *downloader*, *filters*,
 *podcast*, and *llm_trim* modules.
 """
 
@@ -71,8 +71,6 @@ async def check_feeds(config: SiphonConfig, db: Database) -> None:
                 db.update_feed_checked(feed_db["name"], error=str(exc))
 
     log_activity("Feed check complete")
-    next_time = (datetime.now(timezone.utc) + timedelta(minutes=config.schedule.check_interval_minutes)).strftime("%H:%M:%S")
-    set_status(f"Idle — next check at {next_time}")
 
 
 def _normalize_youtube_url(url: str) -> str:
@@ -307,6 +305,9 @@ async def process_downloads(config: SiphonConfig, db: Database) -> None:
     db.reset_stale_downloads()
     db.retry_failed_episodes()
 
+    llm_sem = asyncio.Semaphore(config.llm.claude_concurrency)
+    llm_tasks: list[asyncio.Task] = []
+
     for feed_type in ("youtube", "podcast"):
         max_per_hour, workers, delay = _get_schedule_params(config, feed_type)
 
@@ -367,12 +368,14 @@ async def process_downloads(config: SiphonConfig, db: Database) -> None:
 
                     log_activity(f"Downloaded {title[:50]}", feed=feed_name)
 
-                    # LLM trim post-processing
+                    # LLM trim post-processing — run concurrently
                     if resolved.llm_trim:
                         ep = db.get_episode(video_id, feed_name)
                         if ep and ep["status"] == "done" and ep.get("file_path"):
-                            set_status(f"LLM processing {title[:40]}...")
-                            await _run_llm_trim(ep, resolved, config, db)
+                            async def _do_llm(ep=ep, resolved=resolved):
+                                async with llm_sem:
+                                    await _run_llm_trim(ep, resolved, config, db)
+                            llm_tasks.append(asyncio.create_task(_do_llm()))
                             _llm_processed.add((video_id, feed_name))
 
                 except Exception as exc:
@@ -385,14 +388,23 @@ async def process_downloads(config: SiphonConfig, db: Database) -> None:
                     )
 
     # Re-process episodes that need LLM trim (reset from error or newly enabled)
-    await _process_pending_llm(config, db, skip=_llm_processed)
+    await _process_pending_llm(config, db, skip=_llm_processed, llm_sem=llm_sem, llm_tasks=llm_tasks)
 
-    set_status("Idle")
+    # Wait for all concurrent LLM tasks to finish
+    if llm_tasks:
+        set_status(f"LLM processing ({len(llm_tasks)} episodes)...")
+        results = await asyncio.gather(*llm_tasks, return_exceptions=True)
+        for r in results:
+            if isinstance(r, Exception):
+                logger.error("LLM task failed: %s", r)
+
     await _prune_disk(config, db)
 
 
 async def _process_pending_llm(
     config: SiphonConfig, db: Database, *, skip: set | None = None,
+    llm_sem: asyncio.Semaphore | None = None,
+    llm_tasks: list | None = None,
 ) -> None:
     """Re-process done episodes that need LLM trim (null llm_trim_status)."""
     skip = skip or set()
@@ -414,7 +426,13 @@ async def _process_pending_llm(
             continue
 
         if ep.get("file_path"):
-            await _run_llm_trim(ep, resolved, config, db)
+            if llm_sem is not None and llm_tasks is not None:
+                async def _do_llm(ep=ep, resolved=resolved):
+                    async with llm_sem:
+                        await _run_llm_trim(ep, resolved, config, db)
+                llm_tasks.append(asyncio.create_task(_do_llm()))
+            else:
+                await _run_llm_trim(ep, resolved, config, db)
 
 
 async def _download_youtube_episode(episode, resolved, config, db) -> None:
@@ -532,6 +550,7 @@ async def _run_llm_trim(episode, resolved, config, db) -> None:
     title = episode.get("title", video_id)
 
     logger.info("Running LLM trim on %s/%s", feed_name, video_id)
+    set_status(f"LLM processing {title[:40]}...")
     log_activity(f"LLM processing {title[:50]}", feed=feed_name)
     db.update_episode_status(video_id, feed_name, "done", llm_trim_status="pending")
 

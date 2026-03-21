@@ -3,6 +3,7 @@ import asyncio
 import logging
 import secrets
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import Response
@@ -41,6 +42,10 @@ def create_app(config: SiphonConfig) -> FastAPI:
         app.state.db = db
         app.state.config = config
 
+        # Configure activity timezone from config
+        from siphon.activity import set_timezone
+        set_timezone(config.server.timezone)
+
         # Sync feeds from config to DB
         for feed in config.feeds:
             db.upsert_feed(feed.name, feed.url, feed.type)
@@ -49,6 +54,7 @@ def create_app(config: SiphonConfig) -> FastAPI:
         scheduler = None
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
+            from siphon.activity import set_status, _now_local
             from siphon.pipeline import check_feeds, process_downloads
 
             async def _scheduled_check_feeds():
@@ -57,14 +63,23 @@ def create_app(config: SiphonConfig) -> FastAPI:
                     config_path = getattr(app.state.config, "_config_path", None)
                     if config_path:
                         app.state.config = load_config(config_path)
+                        set_timezone(app.state.config.server.timezone)
                         for feed in app.state.config.feeds:
                             app.state.db.upsert_feed(feed.name, feed.url, feed.type)
                 except Exception:
                     pass
                 await check_feeds(app.state.config, app.state.db)
+                _set_idle_with_next_check(app.state.config)
 
             async def _scheduled_process_downloads():
                 await process_downloads(app.state.config, app.state.db)
+                _set_idle_with_next_check(app.state.config)
+
+            def _set_idle_with_next_check(cfg):
+                from zoneinfo import ZoneInfo
+                tz = ZoneInfo(cfg.server.timezone)
+                next_time = (datetime.now(tz) + timedelta(minutes=cfg.schedule.check_interval_minutes)).strftime("%H:%M:%S")
+                set_status(f"Idle \u2014 next check at {next_time}")
 
             scheduler = AsyncIOScheduler()
             scheduler.add_job(

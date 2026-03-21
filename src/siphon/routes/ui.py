@@ -219,6 +219,9 @@ async def feeds_page(request: Request):
 async def check_now(request: Request):
     import asyncio
     import logging
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+    from siphon.activity import set_status
     from siphon.pipeline import check_feeds, process_downloads
 
     logger = logging.getLogger(__name__)
@@ -238,6 +241,10 @@ async def check_now(request: Request):
             logger.info("Manual download processing completed")
         except Exception as e:
             logger.error("Manual feed check failed: %s", e, exc_info=True)
+        finally:
+            tz = ZoneInfo(config.server.timezone)
+            next_time = (datetime.now(tz) + timedelta(minutes=config.schedule.check_interval_minutes)).strftime("%H:%M:%S")
+            set_status(f"Idle \u2014 next check at {next_time}")
 
     # Keep a strong reference so the task isn't garbage-collected mid-flight.
     task = asyncio.create_task(_check_with_logging())

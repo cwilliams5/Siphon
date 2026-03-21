@@ -3,6 +3,7 @@ from __future__ import annotations
 import threading
 from datetime import datetime, timezone
 from collections import deque
+from zoneinfo import ZoneInfo
 
 _log: deque[dict] = deque(maxlen=200)
 _lock = threading.Lock()
@@ -10,11 +11,22 @@ _lock = threading.Lock()
 _current_status = {"text": "Idle", "updated": ""}
 _status_lock = threading.Lock()
 
+_tz_name: str = "America/Los_Angeles"
+
+
+def set_timezone(tz: str) -> None:
+    global _tz_name
+    _tz_name = tz
+
+
+def _now_local() -> str:
+    return datetime.now(ZoneInfo(_tz_name)).strftime("%H:%M:%S")
+
 
 def set_status(text: str) -> None:
     with _status_lock:
         _current_status["text"] = text
-        _current_status["updated"] = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        _current_status["updated"] = _now_local()
 
 
 def get_status() -> dict:
@@ -25,7 +37,7 @@ def log_activity(message: str, feed: str = "", level: str = "info") -> None:
     """Add an activity entry."""
     with _lock:
         _log.appendleft({
-            "time": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+            "time": _now_local(),
             "message": message,
             "feed": feed,
             "level": level,
