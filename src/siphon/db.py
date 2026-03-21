@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS episodes (
     llm_trim_status TEXT,
     llm_segments_json TEXT,
     llm_cuts_applied INTEGER,
+    llm_retry_count INTEGER NOT NULL DEFAULT 0,
     sb_cuts_applied INTEGER,
     updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (video_id, feed_name)
@@ -60,6 +61,8 @@ MIGRATIONS = [
     "ALTER TABLE episodes ADD COLUMN sb_cuts_applied INTEGER",
     # Add channel_id for YouTube RSS feed lookups
     "ALTER TABLE feeds ADD COLUMN channel_id TEXT",
+    # Add llm_retry_count for LLM error retry tracking
+    "ALTER TABLE episodes ADD COLUMN llm_retry_count INTEGER NOT NULL DEFAULT 0",
 ]
 
 
@@ -269,16 +272,18 @@ class Database:
         self.conn.execute(sql, params)
         self.conn.commit()
 
-    def get_episodes_needing_llm(self, limit: int = 5) -> list[dict]:
-        """Get done episodes that need LLM processing (null or stuck pending)."""
+    def get_episodes_needing_llm(self, limit: int = 5, max_retries: int = 3) -> list[dict]:
+        """Get done episodes that need LLM processing."""
         rows = self.conn.execute(
             """SELECT e.*, f.feed_type FROM episodes e
                JOIN feeds f ON e.feed_name = f.name
                WHERE e.status = 'done'
-                 AND (e.llm_trim_status IS NULL OR e.llm_trim_status = 'pending')
+                 AND (e.llm_trim_status IS NULL
+                      OR e.llm_trim_status = 'pending'
+                      OR (e.llm_trim_status = 'error' AND e.llm_retry_count < ?))
                  AND e.file_path IS NOT NULL
                LIMIT ?""",
-            (limit,),
+            (max_retries, limit),
         ).fetchall()
         return [dict(r) for r in rows]
 

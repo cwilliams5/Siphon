@@ -31,7 +31,7 @@ async def get_feed(feed_name: str, request: Request):
 
     # Filter episodes: hide until LLM done if llm_trim is enabled
     if llm_trim_active:
-        episodes = [ep for ep in all_done if ep.get("llm_trim_status") == "done"]
+        episodes = [ep for ep in all_done if ep.get("llm_trim_status") in ("done", "skipped")]
     else:
         episodes = all_done
 

@@ -65,7 +65,7 @@ def _get_feed_display(request: Request) -> list[dict]:
             s = ep["status"]
             status_counts[s] = status_counts.get(s, 0) + 1
             if s == "done":
-                if resolved.llm_trim and ep.get("llm_trim_status") != "done":
+                if resolved.llm_trim and ep.get("llm_trim_status") not in ("done", "skipped"):
                     llm_pending += 1
                 else:
                     in_rss += 1

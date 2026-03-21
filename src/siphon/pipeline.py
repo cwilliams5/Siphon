@@ -560,6 +560,7 @@ async def _run_llm_trim(episode, resolved, config, db) -> None:
     feed_name = episode["feed_name"]
     file_path = episode["file_path"]
     title = episode.get("title", video_id)
+    retry_count = episode.get("llm_retry_count") or 0
 
     logger.info("Running LLM trim on %s/%s", feed_name, video_id)
     set_status(f"LLM processing {title[:40]}...")
@@ -571,25 +572,33 @@ async def _run_llm_trim(episode, resolved, config, db) -> None:
         None, run_llm_trim, file_path, resolved, config.llm,
     )
 
-    db.update_episode_status(
-        video_id, feed_name, "done",
-        llm_trim_status=result["llm_trim_status"],
-        llm_segments_json=result["llm_segments_json"],
-        llm_cuts_applied=result["llm_cuts_applied"],
-    )
-
     if result["llm_trim_status"] == "done":
+        db.update_episode_status(
+            video_id, feed_name, "done",
+            llm_trim_status="done",
+            llm_segments_json=result["llm_segments_json"],
+            llm_cuts_applied=result["llm_cuts_applied"],
+        )
         cuts = result["llm_cuts_applied"]
         log_activity(f"LLM: {cuts} cuts applied to {title[:50]}", feed=feed_name)
-        logger.info(
-            "LLM trim complete for %s/%s: %d cuts applied",
-            feed_name, video_id, cuts,
-        )
     else:
-        logger.warning(
-            "LLM trim failed for %s/%s: %s",
-            feed_name, video_id, result.get("error", "unknown"),
-        )
+        new_retry = retry_count + 1
+        if new_retry >= 3:
+            # Give up — mark as skipped so it appears in RSS unprocessed
+            db.update_episode_status(
+                video_id, feed_name, "done",
+                llm_trim_status="skipped",
+                llm_retry_count=new_retry,
+            )
+            log_activity(f"LLM: skipped after {new_retry} failures — {title[:50]}", feed=feed_name, level="warning")
+        else:
+            db.update_episode_status(
+                video_id, feed_name, "done",
+                llm_trim_status="error",
+                llm_segments_json=result.get("llm_segments_json", "{}"),
+                llm_retry_count=new_retry,
+            )
+            log_activity(f"LLM: failed (attempt {new_retry}/3) — {title[:50]}", feed=feed_name, level="error")
 
 
 # ---------------------------------------------------------------------- #

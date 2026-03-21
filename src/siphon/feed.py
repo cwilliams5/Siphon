@@ -163,6 +163,8 @@ def generate_feed_xml(
             tag_parts.append("LLM: TRIM ERROR")
         elif llm_status == "pending":
             tag_parts.append("LLM: processing")
+        elif llm_status == "skipped":
+            tag_parts.append("LLM: skipped")
         elif llm_status == "done":
             tag_parts.append(f"LLM: {llm_cuts or 0} cuts")
         # SB status
