@@ -77,6 +77,7 @@ def _get_feed_display(request: Request) -> list[dict]:
             "claude_prompt_extra": resolved.claude_prompt_extra,
             "claude_prompt_override": resolved.claude_prompt_override,
             "display_name": resolved.display_name,
+            "image_url": db_feed.get("image_url"),
             "last_checked_at": db_feed.get("last_checked_at"),
             "last_error": db_feed.get("last_error"),
             "episode_counts": status_counts,

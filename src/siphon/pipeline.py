@@ -86,6 +86,15 @@ async def _check_youtube_feed(resolved, config, db) -> None:
         None, extract_feed_metadata, feed_url, config.cookies
     )
 
+    # Store channel thumbnail as feed artwork
+    thumbnails = metadata.get("thumbnails") or []
+    if thumbnails:
+        # Pick the largest thumbnail
+        best = max(thumbnails, key=lambda t: (t.get("width") or 0) * (t.get("height") or 0))
+        image_url = best.get("url")
+        if image_url:
+            db.update_feed_image(resolved.name, image_url)
+
     entries = metadata.get("entries") or []
 
     for entry in entries:

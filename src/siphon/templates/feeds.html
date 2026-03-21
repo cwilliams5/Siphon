@@ -56,7 +56,10 @@ testCookies();
 {% for feed in feeds %}
 <div class="card">
   <div class="card-header">
-    <div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      {% if feed.image_url %}
+      <img src="{{ feed.image_url }}" alt="" style="width:40px; height:40px; border-radius:6px; object-fit:cover;">
+      {% endif %}
       <strong>{{ feed.display_name or feed.name }}</strong>
       {% if feed.display_name %}
       <span style="color:#888; font-size:0.85em;">({{ feed.name }})</span>

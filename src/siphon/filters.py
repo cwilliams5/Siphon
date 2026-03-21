@@ -51,11 +51,14 @@ def too_short(duration: int | None, min_duration: int) -> str | None:
 def too_old(upload_date: str | None, date_cutoff: str | None) -> str | None:
     """Return ``"too_old"`` if *upload_date* is before *date_cutoff*.
 
-    Both values are ``YYYYMMDD`` strings.  If either is ``None`` the check
-    is skipped and the entry passes.
+    Both values are ``YYYYMMDD`` strings.  If *date_cutoff* is ``None``
+    the check is skipped.  If *upload_date* is ``None`` but a cutoff IS
+    set, the entry is filtered out (we can't verify it's new enough).
     """
-    if upload_date is None or date_cutoff is None:
+    if date_cutoff is None:
         return None
+    if upload_date is None:
+        return "unknown_date"
     if upload_date < date_cutoff:
         return "too_old"
     return None

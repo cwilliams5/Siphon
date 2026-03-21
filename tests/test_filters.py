@@ -104,8 +104,8 @@ class TestTooOld:
     def test_after_cutoff_passes(self):
         assert too_old("20250101", "20240601") is None
 
-    def test_none_upload_date_passes(self):
-        assert too_old(None, "20240601") is None
+    def test_none_upload_date_with_cutoff_filters(self):
+        assert too_old(None, "20240601") == "unknown_date"
 
     def test_none_cutoff_passes(self):
         assert too_old("20240101", None) is None
