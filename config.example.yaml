@@ -39,6 +39,7 @@ cookies:
 llm:
   whisper_model: "base"           # tiny | base | small | medium | large
   whisper_device: "cpu"           # cpu | cuda
+  whisper_word_timestamps: true   # word-level timestamps for precise ad cuts
   claude_model: "claude-sonnet-4-6"
   claude_concurrency: 3
   claude_effort: "medium"         # low | medium | high | max

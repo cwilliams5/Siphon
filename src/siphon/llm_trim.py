@@ -7,7 +7,7 @@ import logging
 import os
 import tempfile
 
-from siphon.ad_detect import detect_ads, filter_segments, resolve_prompt
+from siphon.ad_detect import build_transcript_for_claude, detect_ads, filter_segments, resolve_prompt
 from siphon.config import LLMConfig, ResolvedFeed
 from siphon.cutter import cut_segments, extract_audio
 from siphon.transcribe import transcribe
@@ -78,6 +78,7 @@ def _run_pipeline(
             whisper_input,
             model_size=llm_config.whisper_model,
             device=llm_config.whisper_device,
+            word_timestamps=llm_config.whisper_word_timestamps,
         )
     finally:
         # Clean up temp audio
@@ -103,6 +104,8 @@ def _run_pipeline(
         prompt,
         model=llm_config.claude_model,
         effort=llm_config.claude_effort,
+        words=transcript.get("words"),
+        segments=transcript.get("segments"),
     )
 
     all_segments = raw_result.get("segments", [])

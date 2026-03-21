@@ -48,17 +48,66 @@ def resolve_prompt(feed: ResolvedFeed, llm_config: LLMConfig) -> str:
     return prompt
 
 
+def build_transcript_for_claude(
+    transcript_text: str,
+    segments: list,
+    words: list | None,
+) -> str:
+    """Build a dual-format transcript for Claude with segments and word timestamps.
+
+    When word timestamps are available, produces:
+        SEGMENTS (for understanding content):
+        [0:00-0:45] Welcome to the show...
+        ...
+
+        WORD TIMESTAMPS (for precise cut points):
+        0.00 Welcome
+        0.31 to
+        ...
+
+    When words are not available, falls back to segment-only format.
+    """
+    parts = []
+
+    # Format segments as [M:SS-M:SS] text
+    if segments:
+        parts.append("SEGMENTS (for understanding content):")
+        for seg in segments:
+            start_m, start_s = divmod(int(seg["start"]), 60)
+            end_m, end_s = divmod(int(seg["end"]), 60)
+            parts.append(f"[{start_m}:{start_s:02d}-{end_m}:{end_s:02d}] {seg['text']}")
+        parts.append("")
+
+    # Format word-level timestamps if available
+    if words:
+        parts.append("WORD TIMESTAMPS (for precise cut points):")
+        for w in words:
+            parts.append(f"{w['start']:.2f} {w['word']}")
+        parts.append("")
+
+    if parts:
+        return "\n".join(parts)
+
+    # Ultimate fallback: just use the raw text
+    return transcript_text
+
+
 def detect_ads(
     transcript_text: str,
     prompt: str,
     model: str = "claude-sonnet-4-6",
     effort: str = "medium",
+    words: list | None = None,
+    segments: list | None = None,
 ) -> dict[str, Any]:
     """Invoke Claude CLI to detect ad segments in a transcript.
 
     Returns the structured output dict: {"segments": [...]}
     """
-    full_prompt = f"{prompt}\n\nTRANSCRIPT:\n{transcript_text}"
+    formatted = build_transcript_for_claude(
+        transcript_text, segments or [], words,
+    )
+    full_prompt = f"{prompt}\n\nTRANSCRIPT:\n{formatted}"
 
     cmd = [
         "claude",
