@@ -292,8 +292,20 @@ def _get_keep_per_feed(config: SiphonConfig, feed_type: str) -> int:
     return config.storage.youtube_keep_per_feed
 
 
+_download_lock = asyncio.Lock()
+
+
 async def process_downloads(config: SiphonConfig, db: Database) -> None:
     """Download eligible episodes and prune disk when needed."""
+    if _download_lock.locked():
+        logger.info("process_downloads already running, skipping")
+        return
+    async with _download_lock:
+        await _process_downloads_inner(config, db)
+
+
+async def _process_downloads_inner(config: SiphonConfig, db: Database) -> None:
+    """Inner download processing — runs under _download_lock."""
     set_status("Processing downloads...")
 
     _llm_processed: set = set()  # track episodes LLM-processed this cycle
