@@ -72,7 +72,8 @@ testCookies();
       {% endif %}
     </div>
     <div style="display:flex; gap:8px;">
-      <a href="/feed/{{ feed.name }}" class="btn btn-secondary btn-small" target="_blank">RSS</a>
+      <button class="btn btn-secondary btn-small" onclick="copyRSS('{{ feed.name }}')" title="Copy RSS URL with auth">RSS</button>
+      <a href="https://pcasts.in/feed/{{ auth_base_url.split('://')[1] }}/feed/{{ feed.name }}" class="btn btn-secondary btn-small" style="background:#f43e37;" target="_blank" title="Open in Pocket Casts">PC</a>
       <button class="btn btn-small" onclick="toggleEdit('{{ feed.name }}')">Edit</button>
       <form method="post" action="/ui/feed-action" style="display:inline;"
             onsubmit="return confirm('Mark {{ feed.name }} as caught up? This deletes all downloaded files and sets date_cutoff to today.')">
@@ -219,6 +220,15 @@ testCookies();
 function toggleEdit(name) {
   const el = document.getElementById('edit-' + name);
   el.classList.toggle('hidden');
+}
+function copyRSS(name) {
+  const url = '{{ auth_base_url }}/feed/' + name;
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
 }
 </script>
 {% endblock %}

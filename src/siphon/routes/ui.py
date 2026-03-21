@@ -117,6 +117,12 @@ async def feeds_page(request: Request):
         sum(f["episode_counts"].values()) for f in feeds
     )
 
+    # Build auth-embedded base URL for RSS links
+    # https://user:pass@host/feed/name
+    from urllib.parse import urlparse
+    parsed = urlparse(config.server.base_url)
+    auth_base_url = f"{parsed.scheme}://{config.auth.username}:{config.auth.password}@{parsed.netloc}"
+
     return templates.TemplateResponse("feeds.html", {
         "request": request,
         "active_page": "feeds",
@@ -124,6 +130,7 @@ async def feeds_page(request: Request):
         "disk_usage_gb": round(disk_usage / (1024 ** 3), 2),
         "max_disk_gb": config.storage.max_disk_gb,
         "total_episodes": total_episodes,
+        "auth_base_url": auth_base_url,
         "messages": _get_messages(request),
     })
 
