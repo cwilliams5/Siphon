@@ -15,22 +15,30 @@ async def get_feed(feed_name: str, request: Request):
     if feed is None:
         return Response(status_code=404, content="Feed not found")
 
-    episodes = db.get_done_episodes_by_feed(feed_name)
+    all_done = db.get_done_episodes_by_feed(feed_name)
 
-    # Get channel_name from first episode if available
-    channel_name = None
-    if episodes:
-        channel_name = episodes[0].get("channel_name")
-
-    # Get display_name and sponsorblock from config if set
+    # Get feed config
     display_name = None
     sponsorblock_active = False
+    llm_trim_active = False
     for fc in config.feeds:
         if fc.name == feed_name:
             resolved = resolve_feed(fc, config.defaults)
             display_name = resolved.display_name
             sponsorblock_active = resolved.sponsorblock
+            llm_trim_active = resolved.llm_trim
             break
+
+    # Filter episodes: hide until LLM done if llm_trim is enabled
+    if llm_trim_active:
+        episodes = [ep for ep in all_done if ep.get("llm_trim_status") == "done"]
+    else:
+        episodes = all_done
+
+    # Get channel_name from first episode if available
+    channel_name = None
+    if episodes:
+        channel_name = episodes[0].get("channel_name")
 
     # Get image_url from DB (stored from podcast RSS)
     image_url = feed.get("image_url")
