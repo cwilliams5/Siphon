@@ -104,13 +104,48 @@ def create_app(config: SiphonConfig) -> FastAPI:
     # Web UI — localhost only, no auth needed
     app.include_router(ui_router)
 
-    # Lock down /ui/ to localhost
+    # --- Security middleware ---
+    # Track bad requests per IP for auto-banning
+    _bad_hits: dict[str, list[float]] = {}  # ip -> list of timestamps
+    _banned: dict[str, float] = {}  # ip -> ban expiry timestamp
+    BAN_THRESHOLD = 20  # bad requests within the window
+    BAN_WINDOW = 60  # seconds to count hits
+    BAN_DURATION = 3600  # ban for 1 hour
+
     @app.middleware("http")
-    async def localhost_only_ui(request: Request, call_next):
+    async def security_middleware(request: Request, call_next):
+        import time
+
+        client_ip = request.client.host if request.client else None
+        now = time.time()
+
+        # Check if banned
+        if client_ip and client_ip in _banned:
+            if now < _banned[client_ip]:
+                return Response(status_code=403, content="Banned")
+            else:
+                del _banned[client_ip]
+
+        # Localhost-only for /ui/
         if request.url.path.startswith("/ui"):
-            client_ip = request.client.host if request.client else None
             if client_ip not in ("127.0.0.1", "::1", "localhost"):
                 return Response(status_code=403, content="Forbidden")
-        return await call_next(request)
+
+        response = await call_next(request)
+
+        # Track 404s and 401s from non-localhost IPs
+        if client_ip and client_ip not in ("127.0.0.1", "::1", "localhost"):
+            if response.status_code in (404, 401):
+                hits = _bad_hits.setdefault(client_ip, [])
+                hits.append(now)
+                # Trim old hits
+                _bad_hits[client_ip] = [t for t in hits if now - t < BAN_WINDOW]
+                if len(_bad_hits[client_ip]) >= BAN_THRESHOLD:
+                    _banned[client_ip] = now + BAN_DURATION
+                    _bad_hits.pop(client_ip, None)
+                    logger.warning("Banned IP %s for %ds (%d bad requests)",
+                                   client_ip, BAN_DURATION, BAN_THRESHOLD)
+
+        return response
 
     return app
