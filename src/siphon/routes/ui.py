@@ -57,6 +57,7 @@ def _get_feed_display(request: Request) -> list[dict]:
 
         status_counts = {}
         in_rss = 0
+        llm_pending = 0
         queued = 0
         sb_cuts_total = 0
         llm_cuts_total = 0
@@ -64,7 +65,10 @@ def _get_feed_display(request: Request) -> list[dict]:
             s = ep["status"]
             status_counts[s] = status_counts.get(s, 0) + 1
             if s == "done":
-                in_rss += 1
+                if resolved.llm_trim and ep.get("llm_trim_status") != "done":
+                    llm_pending += 1
+                else:
+                    in_rss += 1
             if s in ("pending", "eligible", "downloading"):
                 queued += 1
             sb_cuts_total += ep.get("sb_cuts_applied") or 0
@@ -93,6 +97,7 @@ def _get_feed_display(request: Request) -> list[dict]:
             "last_error": db_feed.get("last_error"),
             "episode_counts": status_counts,
             "in_rss": in_rss,
+            "llm_pending": llm_pending,
             "queued": queued,
             "sb_cuts_total": sb_cuts_total,
             "llm_cuts_total": llm_cuts_total,
