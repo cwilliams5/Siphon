@@ -13,8 +13,12 @@
     <div class="stat-label">Disk Used / {{ max_disk_gb }} GB</div>
   </div>
   <div class="stat">
+    <div class="stat-value">{{ status.done_count }}</div>
+    <div class="stat-label">In RSS</div>
+  </div>
+  <div class="stat">
     <div class="stat-value">{{ total_episodes }}</div>
-    <div class="stat-label">Episodes</div>
+    <div class="stat-label">Source Episodes</div>
   </div>
   <div class="stat" id="yt-cookie-status" style="cursor:pointer;" onclick="testCookies()">
     <div class="stat-value" id="yt-cookie-icon">?</div>
@@ -92,14 +96,7 @@ testCookies();
     {% if feed.last_error %} &mdash; <span style="color:#e74c3c">Error: {{ feed.last_error }}</span>{% endif %}
   </div>
   <div style="font-size:0.85em; color:#888; margin-top:4px;">
-    {% set counts = feed.episode_counts | default({}) %}
-    {% set parts = [] %}
-    {% if counts.get('done', 0) > 0 %}{% set _ = parts.append('done: ' ~ counts['done']) %}{% endif %}
-    {% if counts.get('eligible', 0) > 0 %}{% set _ = parts.append('ready: ' ~ counts['eligible']) %}{% endif %}
-    {% if counts.get('downloading', 0) > 0 %}{% set _ = parts.append('downloading: ' ~ counts['downloading']) %}{% endif %}
-    {% if counts.get('pending', 0) > 0 %}{% set _ = parts.append('pending: ' ~ counts['pending']) %}{% endif %}
-    {% if counts.get('failed', 0) > 0 %}{% set _ = parts.append('failed: ' ~ counts['failed']) %}{% endif %}
-    {% if parts %}{{ parts | join(' | ') }}{% else %}no episodes{% endif %}
+    In RSS: {{ feed.in_rss }} | Queued: {{ feed.queued }}{% if feed.sb_cuts_total %} | SB cuts: {{ feed.sb_cuts_total }}{% endif %}{% if feed.llm_cuts_total %} | LLM cuts: {{ feed.llm_cuts_total }}{% endif %}
   </div>
 
   <div id="edit-{{ feed.name }}" class="hidden" style="margin-top:12px; padding-top:12px; border-top:1px solid #333;">

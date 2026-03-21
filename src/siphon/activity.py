@@ -7,6 +7,20 @@ from collections import deque
 _log: deque[dict] = deque(maxlen=200)
 _lock = threading.Lock()
 
+_current_status = {"text": "Idle", "updated": ""}
+_status_lock = threading.Lock()
+
+
+def set_status(text: str) -> None:
+    with _status_lock:
+        _current_status["text"] = text
+        _current_status["updated"] = datetime.now(timezone.utc).strftime("%H:%M:%S")
+
+
+def get_status() -> dict:
+    with _status_lock:
+        return dict(_current_status)
+
 def log_activity(message: str, feed: str = "", level: str = "info") -> None:
     """Add an activity entry."""
     with _lock:

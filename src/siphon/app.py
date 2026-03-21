@@ -51,11 +51,25 @@ def create_app(config: SiphonConfig) -> FastAPI:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
             from siphon.pipeline import check_feeds, process_downloads
 
+            async def _scheduled_check_feeds():
+                from siphon.config import load_config
+                try:
+                    config_path = getattr(app.state.config, "_config_path", None)
+                    if config_path:
+                        app.state.config = load_config(config_path)
+                        for feed in app.state.config.feeds:
+                            app.state.db.upsert_feed(feed.name, feed.url, feed.type)
+                except Exception:
+                    pass
+                await check_feeds(app.state.config, app.state.db)
+
+            async def _scheduled_process_downloads():
+                await process_downloads(app.state.config, app.state.db)
+
             scheduler = AsyncIOScheduler()
             scheduler.add_job(
-                check_feeds, 'interval',
+                _scheduled_check_feeds, 'interval',
                 minutes=config.schedule.check_interval_minutes,
-                args=[config, db],
                 id='check_feeds',
                 name='Check feeds',
             )
@@ -64,9 +78,8 @@ def create_app(config: SiphonConfig) -> FastAPI:
                 config.schedule.podcast_download_interval_minutes,
             )
             scheduler.add_job(
-                process_downloads, 'interval',
+                _scheduled_process_downloads, 'interval',
                 minutes=dl_interval,
-                args=[config, db],
                 id='process_downloads',
                 name='Process downloads',
             )

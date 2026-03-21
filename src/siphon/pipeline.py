@@ -12,7 +12,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-from siphon.activity import log_activity
+from siphon.activity import log_activity, set_status
 from siphon.config import SiphonConfig, resolve_feed
 from siphon.db import Database
 from siphon.downloader import (
@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 
 async def check_feeds(config: SiphonConfig, db: Database) -> None:
     """Discover new episodes from the next batch of feeds."""
+    set_status("Checking feeds...")
     log_activity("Starting feed check")
 
     for feed_type, limit in (
@@ -70,6 +71,8 @@ async def check_feeds(config: SiphonConfig, db: Database) -> None:
                 db.update_feed_checked(feed_db["name"], error=str(exc))
 
     log_activity("Feed check complete")
+    next_time = (datetime.now(timezone.utc) + timedelta(minutes=config.schedule.check_interval_minutes)).strftime("%H:%M:%S")
+    set_status(f"Idle — next check at {next_time}")
 
 
 def _normalize_youtube_url(url: str) -> str:
@@ -271,7 +274,7 @@ def _get_keep_per_feed(config: SiphonConfig, feed_type: str) -> int:
 
 async def process_downloads(config: SiphonConfig, db: Database) -> None:
     """Download eligible episodes and prune disk when needed."""
-    log_activity("Starting download processing")
+    set_status("Processing downloads...")
 
     _llm_processed: set = set()  # track episodes processed this cycle
 
@@ -284,75 +287,80 @@ async def process_downloads(config: SiphonConfig, db: Database) -> None:
     for feed_type in ("youtube", "podcast"):
         max_per_hour, workers, delay = _get_schedule_params(config, feed_type)
 
-        recent = db.get_recent_download_count(hours=1, feed_type=feed_type)
-        remaining = max(0, max_per_hour - recent)
-        limit = min(workers, remaining)
+        while True:  # Keep downloading until queue empty or rate limited
+            recent = db.get_recent_download_count(hours=1, feed_type=feed_type)
+            remaining = max(0, max_per_hour - recent)
+            limit = min(workers, remaining)
 
-        if limit == 0:
-            if remaining == 0:
-                log_activity(
-                    f"Rate limit reached for {feed_type} ({recent}/{max_per_hour})",
-                    level="warning",
-                )
-                logger.info(
-                    "Hourly %s download cap reached (%d/%d), skipping",
-                    feed_type, recent, max_per_hour,
-                )
-            continue
+            if limit == 0:
+                if remaining == 0:
+                    log_activity(
+                        f"Rate limit reached for {feed_type} ({recent}/{max_per_hour}/hr)",
+                        level="warning",
+                    )
+                    logger.info(
+                        "Hourly %s download cap reached (%d/%d), skipping",
+                        feed_type, recent, max_per_hour,
+                    )
+                break
 
-        episodes = db.get_eligible_episodes(limit, feed_type=feed_type)
+            episodes = db.get_eligible_episodes(limit, feed_type=feed_type)
+            if not episodes:
+                break
 
-        for i, episode in enumerate(episodes):
-            if i > 0 and delay > 0:
-                logger.debug("Throttling %s: waiting %ds", feed_type, delay)
-                await asyncio.sleep(delay)
+            for i, episode in enumerate(episodes):
+                if i > 0 and delay > 0:
+                    logger.debug("Throttling %s: waiting %ds", feed_type, delay)
+                    await asyncio.sleep(delay)
 
-            video_id = episode["video_id"]
-            feed_name = episode["feed_name"]
-            title = episode.get("title", video_id)
+                video_id = episode["video_id"]
+                feed_name = episode["feed_name"]
+                title = episode.get("title", video_id)
 
-            feed_config = None
-            for fc in config.feeds:
-                if fc.name == feed_name:
-                    feed_config = fc
-                    break
+                feed_config = None
+                for fc in config.feeds:
+                    if fc.name == feed_name:
+                        feed_config = fc
+                        break
 
-            if feed_config is None:
-                logger.warning("Feed config %r not found for %s, skipping", feed_name, video_id)
-                continue
+                if feed_config is None:
+                    logger.warning("Feed config %r not found for %s, skipping", feed_name, video_id)
+                    continue
 
-            resolved = resolve_feed(feed_config, config.defaults)
-            db.update_episode_status(video_id, feed_name, "downloading")
-            log_activity(f"Downloading {title[:50]}", feed=feed_name)
+                resolved = resolve_feed(feed_config, config.defaults)
+                db.update_episode_status(video_id, feed_name, "downloading")
+                set_status(f"Downloading {title[:40]}...")
+                log_activity(f"Downloading {title[:50]}", feed=feed_name)
 
-            try:
-                if resolved.type == "podcast":
-                    await _download_podcast_episode(episode, resolved, config, db)
-                else:
-                    await _download_youtube_episode(episode, resolved, config, db)
+                try:
+                    if resolved.type == "podcast":
+                        await _download_podcast_episode(episode, resolved, config, db)
+                    else:
+                        await _download_youtube_episode(episode, resolved, config, db)
 
-                log_activity(f"Downloaded {title[:50]}", feed=feed_name)
+                    log_activity(f"Downloaded {title[:50]}", feed=feed_name)
 
-                # LLM trim post-processing
-                if resolved.llm_trim:
-                    ep = db.get_episode(video_id, feed_name)
-                    if ep and ep["status"] == "done" and ep.get("file_path"):
-                        await _run_llm_trim(ep, resolved, config, db)
-                        _llm_processed.add((video_id, feed_name))
+                    # LLM trim post-processing
+                    if resolved.llm_trim:
+                        ep = db.get_episode(video_id, feed_name)
+                        if ep and ep["status"] == "done" and ep.get("file_path"):
+                            set_status(f"LLM processing {title[:40]}...")
+                            await _run_llm_trim(ep, resolved, config, db)
+                            _llm_processed.add((video_id, feed_name))
 
-            except Exception as exc:
-                logger.error("Download failed for %s/%s: %s", feed_name, video_id, exc)
-                log_activity(f"Download failed: {str(exc)[:80]}", feed=feed_name, level="error")
-                db.update_episode_status(
-                    video_id, feed_name, "failed",
-                    error=str(exc),
-                    retry_count=episode["retry_count"] + 1,
-                )
+                except Exception as exc:
+                    logger.error("Download failed for %s/%s: %s", feed_name, video_id, exc)
+                    log_activity(f"Download failed: {str(exc)[:80]}", feed=feed_name, level="error")
+                    db.update_episode_status(
+                        video_id, feed_name, "failed",
+                        error=str(exc),
+                        retry_count=episode["retry_count"] + 1,
+                    )
 
     # Re-process episodes that need LLM trim (reset from error or newly enabled)
     await _process_pending_llm(config, db, skip=_llm_processed)
 
-    log_activity("Download processing complete")
+    set_status("Idle")
     await _prune_disk(config, db)
 
 

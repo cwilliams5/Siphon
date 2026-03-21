@@ -15,13 +15,14 @@
   </style>
 </head>
 <body>
+<div style="padding:6px 12px; border-bottom:1px solid #333; color:#7c83ff; font-weight:bold;">
+  {{ current_status }}
+</div>
 <div class="status-bar">
   <span>YT: {{ status.youtube_downloads_this_hour }}/{{ status.youtube_downloads_max }}/hr</span>
   <span>Pod: {{ status.podcast_downloads_this_hour }}/{{ status.podcast_downloads_max }}/hr</span>
   <span>Downloading: {{ status.downloading_count }}</span>
   <span>Ready: {{ status.eligible_count }}</span>
-  <span>Pending: {{ status.pending_count }}</span>
-  <span>Done: {{ status.done_count }}</span>
   <span>LLM Queue: {{ status.llm_processing }}</span>
 </div>
 <div class="log">

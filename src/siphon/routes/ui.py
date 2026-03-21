@@ -56,9 +56,19 @@ def _get_feed_display(request: Request) -> list[dict]:
         episodes = db.get_episodes_by_feed(fc.name)
 
         status_counts = {}
+        in_rss = 0
+        queued = 0
+        sb_cuts_total = 0
+        llm_cuts_total = 0
         for ep in episodes:
             s = ep["status"]
             status_counts[s] = status_counts.get(s, 0) + 1
+            if s == "done":
+                in_rss += 1
+            if s in ("pending", "eligible", "downloading"):
+                queued += 1
+            sb_cuts_total += ep.get("sb_cuts_applied") or 0
+            llm_cuts_total += ep.get("llm_cuts_applied") or 0
 
         feeds_display.append({
             "name": fc.name,
@@ -82,6 +92,10 @@ def _get_feed_display(request: Request) -> list[dict]:
             "last_checked_at": db_feed.get("last_checked_at"),
             "last_error": db_feed.get("last_error"),
             "episode_counts": status_counts,
+            "in_rss": in_rss,
+            "queued": queued,
+            "sb_cuts_total": sb_cuts_total,
+            "llm_cuts_total": llm_cuts_total,
         })
 
     return feeds_display
@@ -148,13 +162,15 @@ async def activity_log(request: Request):
 
 @router.get("/activity-log", response_class=HTMLResponse)
 async def activity_log_page(request: Request):
-    from siphon.activity import get_recent
+    from siphon.activity import get_recent, get_status as get_activity_status
     config = request.app.state.config
     db = request.app.state.db
+    status_info = get_activity_status()
     return templates.TemplateResponse("activity_log.html", {
         "request": request,
         "activity_log": get_recent(50),
         "status": _get_system_status(config, db),
+        "current_status": status_info["text"],
     })
 
 
