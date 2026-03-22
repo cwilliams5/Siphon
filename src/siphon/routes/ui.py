@@ -535,26 +535,63 @@ def _do_delete(config, db, feed_name):
 
 
 def _do_catchup(config, db, feed_name):
-    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    # Find the most recent episode actually in RSS
+    latest = db.conn.execute(
+        """SELECT upload_date FROM episodes
+           WHERE feed_name = ? AND status = 'done'
+             AND llm_trim_status IN ('done', 'skipped')
+           ORDER BY upload_date DESC LIMIT 1""",
+        (feed_name,),
+    ).fetchone()
 
+    if not latest or not latest["upload_date"]:
+        # No episodes in RSS — just set cutoff to today
+        new_cutoff = datetime.now(timezone.utc).strftime("%Y%m%d")
+    else:
+        # Set cutoff to 1 day before the latest episode
+        from datetime import datetime as dt
+        latest_date = dt.strptime(latest["upload_date"], "%Y%m%d")
+        new_cutoff = (latest_date - timedelta(days=1)).strftime("%Y%m%d")
+
+    # Update config
     for i, fc in enumerate(config.feeds):
         if fc.name == feed_name:
             update = fc.model_dump()
-            update["date_cutoff"] = today
+            update["date_cutoff"] = new_cutoff
             config.feeds[i] = FeedConfig(**update)
             break
 
+    # Delete files and prune episodes OLDER than the latest RSS episode
     download_dir = config.storage.download_dir
-    feed_dir = os.path.join(download_dir, feed_name)
-    if os.path.isdir(feed_dir):
-        for f in os.listdir(feed_dir):
+    all_episodes = db.get_episodes_by_feed(feed_name)
+    keep_id = latest["upload_date"] if latest else None
+
+    for ep in all_episodes:
+        # Keep the latest RSS episode, prune everything else
+        if ep["status"] == "done" and ep.get("llm_trim_status") in ("done", "skipped"):
+            if ep.get("upload_date") == keep_id:
+                # This is the one we're keeping (or one of them if same day)
+                keep_id = None  # Only keep the first match
+                continue
+
+        # Skip episodes that aren't taking up disk space
+        if ep["status"] in ("filtered", "pruned"):
+            continue
+
+        # Delete file if exists
+        if ep.get("file_path"):
             try:
-                os.remove(os.path.join(feed_dir, f))
+                os.remove(ep["file_path"])
             except OSError:
                 pass
 
-    episodes = db.get_done_episodes_by_feed(feed_name)
-    for ep in episodes:
+        # Also delete any transcript file
+        transcript = os.path.join(download_dir, feed_name, f"{ep['video_id']}_transcript.json")
+        try:
+            os.remove(transcript)
+        except OSError:
+            pass
+
         db.update_episode_status(ep["video_id"], feed_name, "pruned")
 
     _save_config(config)
