@@ -1,4 +1,4 @@
-"""System tray icon for Siphon — start/pause/stop/open config."""
+"""System tray icon for Siphon -- start/pause/stop/open config."""
 
 from __future__ import annotations
 
@@ -47,12 +47,11 @@ class SiphonTray:
         self.port = port
         self.host = host
         self._icon = None
-        self._paused = False
         self._scheduler = None
         self._server_thread = None
 
     def set_scheduler(self, scheduler: Any) -> None:
-        """Set the APScheduler instance for pause/resume control."""
+        """Set the APScheduler instance (kept for compatibility)."""
         self._scheduler = scheduler
 
     @property
@@ -63,17 +62,14 @@ class SiphonTray:
         webbrowser.open(f"{self.base_url}/ui/")
 
     def _on_pause(self, icon, item):
-        if self._scheduler is None:
-            logger.warning("No scheduler set — cannot pause")
-            return
-        if self._paused:
-            self._scheduler.resume()
-            self._paused = False
-            logger.info("Scheduler resumed")
+        from siphon.activity import get_pause_state, request_pause, resume
+        state = get_pause_state()
+        if state in ("paused", "pending_pause"):
+            resume()
+            logger.info("Workers resumed")
         else:
-            self._scheduler.pause()
-            self._paused = True
-            logger.info("Scheduler paused")
+            request_pause()
+            logger.info("Pause requested")
         # Update the menu to reflect the new state
         self._update_menu()
 
@@ -85,10 +81,10 @@ class SiphonTray:
             data = resp.json()
             msg = data.get("message", "Unknown result")
             if self._icon:
-                self._icon.notify(msg, "Siphon — YouTube Login")
+                self._icon.notify(msg, "Siphon -- YouTube Login")
         except Exception as exc:
             if self._icon:
-                self._icon.notify(f"Test failed: {exc}", "Siphon — YouTube Login")
+                self._icon.notify(f"Test failed: {exc}", "Siphon -- YouTube Login")
 
     def _on_quit(self, icon, item):
         logger.info("Quit requested from tray")
@@ -97,9 +93,6 @@ class SiphonTray:
         import os
         os._exit(0)
 
-    def _pause_label(self, item):
-        return "Resume" if self._paused else "Pause"
-
     def _update_menu(self):
         """Rebuild the menu to reflect current state."""
         if self._icon is not None:
@@ -107,8 +100,19 @@ class SiphonTray:
 
     def _build_menu(self):
         import pystray
-        pause_text = "Resume" if self._paused else "Pause"
-        status_text = "Paused" if self._paused else "Running"
+        from siphon.activity import get_pause_state
+
+        state = get_pause_state()
+        if state == "paused":
+            pause_text = "Resume"
+            status_text = "Paused"
+        elif state == "pending_pause":
+            pause_text = "Resume"
+            status_text = "Pending Pause"
+        else:
+            pause_text = "Pause"
+            status_text = "Running"
+
         return pystray.Menu(
             pystray.MenuItem(f"Siphon ({status_text})", None, enabled=False),
             pystray.Menu.SEPARATOR,

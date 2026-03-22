@@ -51,3 +51,42 @@ def get_recent(limit: int = 50) -> list[dict]:
 def clear() -> None:
     with _lock:
         _log.clear()
+
+
+# ------------------------------------------------------------------ #
+# Pause / Resume system — queue-level control for all workers
+# ------------------------------------------------------------------ #
+
+_pause_state = "running"  # "running" | "pending_pause" | "paused"
+_pause_lock = threading.Lock()
+
+
+def request_pause() -> None:
+    """Request a graceful pause. Workers will stop after finishing current item."""
+    global _pause_state
+    with _pause_lock:
+        if _pause_state == "running":
+            _pause_state = "pending_pause"
+
+
+def resume() -> None:
+    """Resume all workers."""
+    global _pause_state
+    with _pause_lock:
+        _pause_state = "running"
+
+
+def check_paused() -> bool:
+    """Workers call this before starting next item. Returns True if should not proceed."""
+    global _pause_state
+    with _pause_lock:
+        if _pause_state == "pending_pause":
+            _pause_state = "paused"
+            return True
+        return _pause_state == "paused"
+
+
+def get_pause_state() -> str:
+    """Return current pause state: 'running', 'pending_pause', or 'paused'."""
+    with _pause_lock:
+        return _pause_state

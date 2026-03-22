@@ -50,14 +50,21 @@ def create_app(config: SiphonConfig) -> FastAPI:
         for feed in config.feeds:
             db.upsert_feed(feed.name, feed.url, feed.type)
 
+        # Recover episodes stuck in intermediate states from a previous crash
+        from siphon.pipeline import recover_interrupted
+        recover_interrupted(config, db)
+
         # Start scheduler
         scheduler = None
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
-            from siphon.activity import set_status, _now_local
-            from siphon.pipeline import check_feeds, process_downloads
+            from siphon.activity import check_paused, set_status, _now_local
+            from siphon.pipeline import (
+                check_feeds, process_downloads,
+                process_whisper, process_claude,
+            )
 
-            async def _scheduled_check_feeds():
+            def _reload_config():
                 from siphon.config import load_config
                 try:
                     config_path = getattr(app.state.config, "_config_path", None)
@@ -68,12 +75,30 @@ def create_app(config: SiphonConfig) -> FastAPI:
                             app.state.db.upsert_feed(feed.name, feed.url, feed.type)
                 except Exception:
                     pass
+
+            async def _scheduled_check_feeds():
+                if check_paused():
+                    return
+                _reload_config()
                 await check_feeds(app.state.config, app.state.db)
                 _set_idle_with_next_check(app.state.config)
 
             async def _scheduled_process_downloads():
+                if check_paused():
+                    return
+                _reload_config()
                 await process_downloads(app.state.config, app.state.db)
                 _set_idle_with_next_check(app.state.config)
+
+            async def _scheduled_process_whisper():
+                if check_paused():
+                    return
+                await process_whisper(app.state.config, app.state.db)
+
+            async def _scheduled_process_claude():
+                if check_paused():
+                    return
+                await process_claude(app.state.config, app.state.db)
 
             def _set_idle_with_next_check(cfg):
                 from zoneinfo import ZoneInfo
@@ -98,9 +123,21 @@ def create_app(config: SiphonConfig) -> FastAPI:
                 id='process_downloads',
                 name='Process downloads',
             )
+            scheduler.add_job(
+                _scheduled_process_whisper, 'interval',
+                seconds=30,
+                id='process_whisper',
+                name='Process Whisper',
+            )
+            scheduler.add_job(
+                _scheduled_process_claude, 'interval',
+                seconds=30,
+                id='process_claude',
+                name='Process Claude',
+            )
             scheduler.start()
             app.state.scheduler = scheduler
-            logger.info("Scheduler started")
+            logger.info("Scheduler started with 4 jobs")
         except Exception as e:
             logger.warning(f"Scheduler failed to start: {e}")
 

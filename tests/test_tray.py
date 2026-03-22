@@ -1,4 +1,4 @@
-"""Tests for siphon.tray — system tray icon."""
+"""Tests for siphon.tray -- system tray icon."""
 
 from __future__ import annotations
 
@@ -38,24 +38,48 @@ class TestSiphonTray:
         assert tray._scheduler is mock_scheduler
 
     def test_pause_toggles(self):
+        from siphon.activity import get_pause_state, resume
+
+        # Reset pause state before test
+        resume()
+
         tray = SiphonTray()
-        mock_scheduler = MagicMock()
-        tray.set_scheduler(mock_scheduler)
 
-        # First call: pause
+        # First call: request pause
         tray._on_pause(None, None)
-        mock_scheduler.pause.assert_called_once()
-        assert tray._paused is True
+        assert get_pause_state() == "pending_pause"
 
-        # Second call: resume
+        # Second call: resume (from pending_pause)
         tray._on_pause(None, None)
-        mock_scheduler.resume.assert_called_once()
-        assert tray._paused is False
+        assert get_pause_state() == "running"
+
+    def test_pause_resume_from_paused(self):
+        from siphon.activity import check_paused, get_pause_state, request_pause, resume
+
+        # Reset state
+        resume()
+
+        tray = SiphonTray()
+
+        # Request pause, then consume it to transition to "paused"
+        request_pause()
+        check_paused()  # transitions pending_pause -> paused
+        assert get_pause_state() == "paused"
+
+        # Now resume
+        tray._on_pause(None, None)
+        assert get_pause_state() == "running"
+
+        # Clean up
+        resume()
 
     def test_pause_without_scheduler(self):
         tray = SiphonTray()
         # Should not raise
         tray._on_pause(None, None)
+        # Clean up
+        from siphon.activity import resume
+        resume()
 
     @patch("siphon.tray.webbrowser.open")
     def test_open_ui(self, mock_open):
@@ -69,9 +93,19 @@ class TestSiphonTray:
         assert menu is not None
 
     def test_menu_shows_paused_state(self):
+        from siphon.activity import request_pause, check_paused, resume
+
+        # Reset
+        resume()
+
         tray = SiphonTray()
-        tray._paused = True
+
+        # Request pause, transition to paused
+        request_pause()
+        check_paused()
+
         menu = tray._build_menu()
-        # Menu should exist — we can't easily inspect pystray MenuItem internals
-        # but at least verify it doesn't crash
         assert menu is not None
+
+        # Clean up
+        resume()

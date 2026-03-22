@@ -63,6 +63,14 @@ MIGRATIONS = [
     "ALTER TABLE feeds ADD COLUMN channel_id TEXT",
     # Add llm_retry_count for LLM error retry tracking
     "ALTER TABLE episodes ADD COLUMN llm_retry_count INTEGER NOT NULL DEFAULT 0",
+    # Pipeline split: per-stage timing and metrics
+    "ALTER TABLE episodes ADD COLUMN whisper_duration_seconds REAL",
+    "ALTER TABLE episodes ADD COLUMN claude_duration_seconds REAL",
+    "ALTER TABLE episodes ADD COLUMN ffmpeg_duration_seconds REAL",
+    "ALTER TABLE episodes ADD COLUMN whisper_word_count INTEGER",
+    "ALTER TABLE episodes ADD COLUMN whisper_segment_count INTEGER",
+    "ALTER TABLE episodes ADD COLUMN transcript_size_bytes INTEGER",
+    "ALTER TABLE episodes ADD COLUMN whisper_model TEXT",
 ]
 
 
@@ -272,6 +280,31 @@ class Database:
         self.conn.execute(sql, params)
         self.conn.commit()
 
+    def get_pending_whisper(self, limit: int = 1) -> list[dict]:
+        """Get episodes with status='pending_whisper', ordered by discovered_at."""
+        rows = self.conn.execute(
+            """SELECT e.*, f.feed_type FROM episodes e
+               JOIN feeds f ON e.feed_name = f.name
+               WHERE e.status = 'pending_whisper'
+               ORDER BY e.discovered_at ASC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_pending_claude(self, limit: int = 3) -> list[dict]:
+        """Get episodes with status='pending_claude' and file_path is set."""
+        rows = self.conn.execute(
+            """SELECT e.*, f.feed_type FROM episodes e
+               JOIN feeds f ON e.feed_name = f.name
+               WHERE e.status = 'pending_claude'
+                 AND e.file_path IS NOT NULL
+               ORDER BY e.discovered_at ASC
+               LIMIT ?""",
+            (limit,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_episodes_needing_llm(self, limit: int = 5, max_retries: int = 3) -> list[dict]:
         """Get done episodes that need LLM processing."""
         rows = self.conn.execute(
@@ -310,19 +343,24 @@ class Database:
     def get_recent_download_count(
         self, hours: int = 1, feed_type: str | None = None
     ) -> int:
-        """Count episodes that reached 'done' status within the last *hours*."""
+        """Count episodes that completed downloading within the last *hours*.
+
+        Includes done, pending_whisper, and pending_claude statuses since
+        episodes move through these pipeline stages after downloading.
+        """
+        statuses = "('done', 'pending_whisper', 'pending_claude')"
         if feed_type is not None:
             row = self.conn.execute(
                 "SELECT COUNT(*) AS cnt FROM episodes e "
                 "JOIN feeds f ON e.feed_name = f.name "
-                "WHERE e.status = 'done' AND e.updated_at >= datetime('now', ?) "
+                f"WHERE e.status IN {statuses} AND e.updated_at >= datetime('now', ?) "
                 "AND f.feed_type = ?",
                 (f"-{hours} hours", feed_type),
             ).fetchone()
         else:
             row = self.conn.execute(
                 "SELECT COUNT(*) AS cnt FROM episodes "
-                "WHERE status = 'done' AND updated_at >= datetime('now', ?)",
+                f"WHERE status IN {statuses} AND updated_at >= datetime('now', ?)",
                 (f"-{hours} hours",),
             ).fetchone()
         return int(row["cnt"])

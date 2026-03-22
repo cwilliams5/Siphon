@@ -100,7 +100,7 @@ testCookies();
     {% if feed.last_error %} &mdash; <span style="color:#e74c3c">Error: {{ feed.last_error }}</span>{% endif %}
   </div>
   <div style="font-size:0.85em; color:#888; margin-top:4px;">
-    In RSS: {{ feed.in_rss }}{% if feed.llm_pending %} | LLM Queue: {{ feed.llm_pending }}{% endif %}{% if feed.queued %} | DL Queue: {{ feed.queued }}{% endif %}{% if feed.sb_cuts_total %} | SB cuts: {{ feed.sb_cuts_total }}{% endif %}{% if feed.llm_cuts_total %} | LLM cuts: {{ feed.llm_cuts_total }}{% endif %}
+    In RSS: {{ feed.in_rss }}{% if feed.whisper_pending %} | Whisper: {{ feed.whisper_pending }}{% endif %}{% if feed.claude_pending %} | Claude: {{ feed.claude_pending }}{% endif %}{% if feed.queued %} | DL Queue: {{ feed.queued }}{% endif %}{% if feed.sb_cuts_total %} | SB cuts: {{ feed.sb_cuts_total }}{% endif %}{% if feed.llm_cuts_total %} | LLM cuts: {{ feed.llm_cuts_total }}{% endif %}
   </div>
 
   <div id="edit-{{ feed.name }}" class="hidden" style="margin-top:12px; padding-top:12px; border-top:1px solid #333;">

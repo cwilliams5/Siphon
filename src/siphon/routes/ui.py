@@ -57,7 +57,8 @@ def _get_feed_display(request: Request) -> list[dict]:
 
         status_counts = {}
         in_rss = 0
-        llm_pending = 0
+        whisper_pending = 0
+        claude_pending = 0
         queued = 0
         sb_cuts_total = 0
         llm_cuts_total = 0
@@ -66,9 +67,13 @@ def _get_feed_display(request: Request) -> list[dict]:
             status_counts[s] = status_counts.get(s, 0) + 1
             if s == "done":
                 if resolved.llm_trim and ep.get("llm_trim_status") not in ("done", "skipped"):
-                    llm_pending += 1
+                    claude_pending += 1  # legacy: done but llm not processed
                 else:
                     in_rss += 1
+            if s == "pending_whisper":
+                whisper_pending += 1
+            if s == "pending_claude":
+                claude_pending += 1
             if s in ("pending", "eligible", "downloading"):
                 queued += 1
             sb_cuts_total += ep.get("sb_cuts_applied") or 0
@@ -97,7 +102,8 @@ def _get_feed_display(request: Request) -> list[dict]:
             "last_error": db_feed.get("last_error"),
             "episode_counts": status_counts,
             "in_rss": in_rss,
-            "llm_pending": llm_pending,
+            "whisper_pending": whisper_pending,
+            "claude_pending": claude_pending,
             "queued": queued,
             "sb_cuts_total": sb_cuts_total,
             "llm_cuts_total": llm_cuts_total,
@@ -108,6 +114,8 @@ def _get_feed_display(request: Request) -> list[dict]:
 
 def _get_system_status(config: SiphonConfig, db: Database) -> dict:
     """Build a summary dict of system-wide status for the dashboard."""
+    from siphon.activity import get_pause_state
+
     sched = config.schedule
     yt_recent = db.get_recent_download_count(hours=1, feed_type="youtube")
     pod_recent = db.get_recent_download_count(hours=1, feed_type="podcast")
@@ -117,14 +125,11 @@ def _get_system_status(config: SiphonConfig, db: Database) -> dict:
         "  SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count, "
         "  SUM(CASE WHEN status = 'eligible' THEN 1 ELSE 0 END) AS eligible_count, "
         "  SUM(CASE WHEN status = 'downloading' THEN 1 ELSE 0 END) AS downloading_count, "
-        "  SUM(CASE WHEN status = 'done' AND llm_trim_status = 'pending' THEN 1 ELSE 0 END) AS llm_pending_count, "
+        "  SUM(CASE WHEN status = 'pending_whisper' THEN 1 ELSE 0 END) AS whisper_queue, "
+        "  SUM(CASE WHEN status = 'pending_claude' THEN 1 ELSE 0 END) AS claude_queue, "
         "  SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done_count "
         "FROM episodes"
     ).fetchone()
-
-    llm_processing = db.conn.execute(
-        "SELECT COUNT(*) FROM episodes WHERE status = 'done' AND llm_trim_status IS NULL AND file_path IS NOT NULL"
-    ).fetchone()[0]
 
     return {
         "youtube_downloads_this_hour": yt_recent,
@@ -134,9 +139,10 @@ def _get_system_status(config: SiphonConfig, db: Database) -> dict:
         "pending_count": int(row["pending_count"] or 0),
         "eligible_count": int(row["eligible_count"] or 0),
         "downloading_count": int(row["downloading_count"] or 0),
-        "llm_pending_count": int(row["llm_pending_count"] or 0),
+        "whisper_queue": int(row["whisper_queue"] or 0),
+        "claude_queue": int(row["claude_queue"] or 0),
         "done_count": int(row["done_count"] or 0),
-        "llm_processing": llm_processing,
+        "pause_state": get_pause_state(),
     }
 
 

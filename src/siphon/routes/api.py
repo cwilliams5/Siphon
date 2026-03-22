@@ -8,16 +8,13 @@ router = APIRouter()
 
 @router.get("/health")
 async def health(request: Request):
+    from siphon.activity import get_pause_state
+
     db = request.app.state.db
     config = request.app.state.config
 
     feeds = db.get_all_feeds()
     disk_usage = db.get_disk_usage()
-
-    scheduler = getattr(request.app.state, "scheduler", None)
-    scheduler_state = "unknown"
-    if scheduler is not None:
-        scheduler_state = "paused" if getattr(scheduler, "_paused", False) else "running"
 
     feed_status = []
     for feed in feeds:
@@ -36,7 +33,7 @@ async def health(request: Request):
 
     return JSONResponse({
         "status": "ok",
-        "scheduler": scheduler_state,
+        "pause_state": get_pause_state(),
         "feeds": feed_status,
         "disk_usage_bytes": disk_usage,
         "disk_usage_gb": round(disk_usage / (1024**3), 2),
@@ -75,16 +72,12 @@ async def test_cookies(request: Request):
 
 @router.post("/scheduler/pause")
 async def pause_scheduler(request: Request):
-    scheduler = getattr(request.app.state, "scheduler", None)
-    if scheduler is None:
-        return JSONResponse({"error": "No scheduler"}, status_code=503)
-    scheduler.pause()
-    return JSONResponse({"status": "paused"})
+    from siphon.activity import request_pause, get_pause_state
+    request_pause()
+    return JSONResponse({"status": get_pause_state()})
 
 @router.post("/scheduler/resume")
 async def resume_scheduler(request: Request):
-    scheduler = getattr(request.app.state, "scheduler", None)
-    if scheduler is None:
-        return JSONResponse({"error": "No scheduler"}, status_code=503)
-    scheduler.resume()
-    return JSONResponse({"status": "running"})
+    from siphon.activity import resume, get_pause_state
+    resume()
+    return JSONResponse({"status": get_pause_state()})
