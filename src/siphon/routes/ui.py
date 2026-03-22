@@ -21,6 +21,17 @@ templates = Jinja2Templates(
 )
 
 
+def _format_number(value):
+    """Jinja2 filter: add commas to large numbers."""
+    try:
+        return f"{int(value):,}"
+    except (ValueError, TypeError):
+        return value
+
+
+templates.env.filters["commafy"] = _format_number
+
+
 def _flash(request: Request, text: str, msg_type: str = "info") -> None:
     if not hasattr(request.state, "messages"):
         request.state.messages = []
@@ -125,7 +136,8 @@ def _get_system_status(config: SiphonConfig, db: Database) -> dict:
         "SELECT "
         "  SUM(CASE WHEN status = 'eligible' THEN 1 ELSE 0 END) AS dl_queue, "
         "  SUM(CASE WHEN status = 'pending_whisper' THEN 1 ELSE 0 END) AS whisper_queue, "
-        "  SUM(CASE WHEN status = 'pending_claude' THEN 1 ELSE 0 END) AS claude_queue "
+        "  SUM(CASE WHEN status = 'pending_claude' THEN 1 ELSE 0 END) AS claude_queue, "
+        "  SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done_count "
         "FROM episodes"
     ).fetchone()
 
@@ -137,6 +149,7 @@ def _get_system_status(config: SiphonConfig, db: Database) -> dict:
         "dl_queue": int(row["dl_queue"] or 0),
         "whisper_queue": int(row["whisper_queue"] or 0),
         "claude_queue": int(row["claude_queue"] or 0),
+        "done_count": int(row["done_count"] or 0),
         "active_dl": active.get("download", 0),
         "active_whisper": active.get("whisper", 0),
         "active_claude": active.get("claude", 0),
@@ -201,6 +214,32 @@ async def feeds_page(request: Request):
 
     status = _get_system_status(config, db)
 
+    # Top stats: aggregate cuts and avg processing time
+    agg = db.conn.execute(
+        "SELECT "
+        "  COALESCE(SUM(llm_cuts_applied), 0) AS total_llm_cuts, "
+        "  COALESCE(SUM(sb_cuts_applied), 0) AS total_sb_cuts "
+        "FROM episodes WHERE status = 'done'"
+    ).fetchone()
+    total_llm_cuts = int(agg["total_llm_cuts"])
+    total_sb_cuts = int(agg["total_sb_cuts"])
+
+    avg_row = db.conn.execute(
+        "SELECT AVG(whisper_duration_seconds + claude_duration_seconds) AS avg_proc "
+        "FROM episodes "
+        "WHERE whisper_duration_seconds IS NOT NULL AND claude_duration_seconds IS NOT NULL"
+    ).fetchone()
+    avg_proc = avg_row["avg_proc"]
+    if avg_proc is not None:
+        avg_minutes = int(avg_proc) // 60
+        avg_seconds = int(avg_proc) % 60
+        avg_processing_display = f"{avg_minutes}:{avg_seconds:02d}"
+    else:
+        avg_processing_display = "--:--"
+
+    # Insights
+    insights = _compute_insights(db, config)
+
     # Build auth-embedded base URL for RSS links
     # https://user:pass@host/feed/name
     from urllib.parse import urlparse
@@ -211,10 +250,14 @@ async def feeds_page(request: Request):
         "request": request,
         "active_page": "feeds",
         "feeds": feeds,
-        "disk_usage_gb": round(disk_usage / (1024 ** 3), 2),
+        "disk_usage_gb": round(disk_usage / (1024 ** 3), 1),
         "max_disk_gb": config.storage.max_disk_gb,
         "total_episodes": total_episodes,
+        "total_llm_cuts": total_llm_cuts,
+        "total_sb_cuts": total_sb_cuts,
+        "avg_processing_display": avg_processing_display,
         "status": status,
+        "insights": insights,
         "auth_base_url": auth_base_url,
         "messages": _get_messages(request),
     })
@@ -261,6 +304,137 @@ async def check_now(request: Request):
     task.add_done_callback(_get_background_tasks(request.app).discard)
 
     return RedirectResponse("/ui/", status_code=303)
+
+
+def _compute_insights(db: Database, config) -> dict:
+    """Compute dashboard insight data from the database."""
+    # Build display-name lookup from config feeds
+    display_names = {}
+    for fc in config.feeds:
+        resolved = resolve_feed(fc, config.defaults)
+        display_names[fc.name] = resolved.display_name or fc.name
+
+    # Most stale feeds (oldest latest episode)
+    stale_rows = db.conn.execute(
+        "SELECT feed_name, MAX(upload_date) as latest_date "
+        "FROM episodes WHERE status = 'done' "
+        "GROUP BY feed_name "
+        "ORDER BY latest_date ASC "
+        "LIMIT 3"
+    ).fetchall()
+    stale = []
+    for row in stale_rows:
+        if row["latest_date"]:
+            try:
+                latest_dt = datetime.strptime(row["latest_date"], "%Y%m%d")
+                days_ago = (datetime.now() - latest_dt).days
+            except (ValueError, TypeError):
+                days_ago = "?"
+            stale.append({
+                "name": display_names.get(row["feed_name"], row["feed_name"]),
+                "days_ago": days_ago,
+            })
+
+    # Disk hogs (top 3 by total file size)
+    disk_rows = db.conn.execute(
+        "SELECT feed_name, SUM(file_size) as total_bytes "
+        "FROM episodes WHERE status IN ('done', 'pending_whisper', 'pending_claude') "
+        "AND file_size IS NOT NULL "
+        "GROUP BY feed_name "
+        "ORDER BY total_bytes DESC "
+        "LIMIT 3"
+    ).fetchall()
+    disk_hogs = []
+    for row in disk_rows:
+        total_gb = round(row["total_bytes"] / (1024 ** 3), 1)
+        disk_hogs.append({
+            "name": display_names.get(row["feed_name"], row["feed_name"]),
+            "size_display": f"{total_gb} GB",
+        })
+
+    # Longest processing (top 3 episodes by whisper+claude time)
+    proc_rows = db.conn.execute(
+        "SELECT feed_name, title, "
+        "  COALESCE(whisper_duration_seconds, 0) + COALESCE(claude_duration_seconds, 0) as total_time "
+        "FROM episodes "
+        "WHERE whisper_duration_seconds IS NOT NULL OR claude_duration_seconds IS NOT NULL "
+        "ORDER BY total_time DESC "
+        "LIMIT 3"
+    ).fetchall()
+    longest_proc = []
+    for row in proc_rows:
+        total_secs = int(row["total_time"])
+        mins = total_secs // 60
+        secs = total_secs % 60
+        longest_proc.append({
+            "title": row["title"],
+            "feed": display_names.get(row["feed_name"], row["feed_name"]),
+            "time_display": f"{mins}:{secs:02d}",
+        })
+
+    # Most SB cuts per episode (top 3 feeds by avg)
+    sb_rows = db.conn.execute(
+        "SELECT feed_name, AVG(sb_cuts_applied) as avg_sb, COUNT(*) as ep_count "
+        "FROM episodes "
+        "WHERE status = 'done' AND sb_cuts_applied IS NOT NULL AND sb_cuts_applied > 0 "
+        "GROUP BY feed_name "
+        "ORDER BY avg_sb DESC "
+        "LIMIT 3"
+    ).fetchall()
+    most_sb = []
+    for row in sb_rows:
+        most_sb.append({
+            "name": display_names.get(row["feed_name"], row["feed_name"]),
+            "avg": round(row["avg_sb"], 1),
+            "count": row["ep_count"],
+        })
+
+    # Most LLM cuts per episode (top 3 feeds by avg)
+    llm_rows = db.conn.execute(
+        "SELECT feed_name, AVG(llm_cuts_applied) as avg_llm, COUNT(*) as ep_count "
+        "FROM episodes "
+        "WHERE status = 'done' AND llm_cuts_applied IS NOT NULL AND llm_cuts_applied > 0 "
+        "GROUP BY feed_name "
+        "ORDER BY avg_llm DESC "
+        "LIMIT 3"
+    ).fetchall()
+    most_llm = []
+    for row in llm_rows:
+        most_llm.append({
+            "name": display_names.get(row["feed_name"], row["feed_name"]),
+            "avg": round(row["avg_llm"], 1),
+            "count": row["ep_count"],
+        })
+
+    # Highest filter rate (top 3 feeds by ratio of filtered to total)
+    filter_rows = db.conn.execute(
+        "SELECT feed_name, "
+        "  SUM(CASE WHEN status = 'filtered' THEN 1 ELSE 0 END) AS filtered, "
+        "  COUNT(*) AS total "
+        "FROM episodes "
+        "GROUP BY feed_name "
+        "HAVING total > 0 AND filtered > 0 "
+        "ORDER BY CAST(filtered AS REAL) / total DESC "
+        "LIMIT 3"
+    ).fetchall()
+    highest_filter = []
+    for row in filter_rows:
+        pct = round(100 * row["filtered"] / row["total"])
+        highest_filter.append({
+            "name": display_names.get(row["feed_name"], row["feed_name"]),
+            "pct": pct,
+            "filtered": row["filtered"],
+            "total": row["total"],
+        })
+
+    return {
+        "stale": stale,
+        "disk_hogs": disk_hogs,
+        "longest_proc": longest_proc,
+        "most_sb": most_sb,
+        "most_llm": most_llm,
+        "highest_filter": highest_filter,
+    }
 
 
 def _reload_config(app) -> None:
