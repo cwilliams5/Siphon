@@ -24,7 +24,7 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 
-from siphon.activity import check_paused, log_activity, set_status
+from siphon.activity import check_paused, log_activity, set_status, worker_start, worker_done
 from siphon.config import SiphonConfig, resolve_feed
 from siphon.db import Database
 from siphon.downloader import (
@@ -423,6 +423,7 @@ async def _process_downloads_inner(config: SiphonConfig, db: Database) -> None:
                 db.update_episode_status(video_id, feed_name, "downloading")
                 set_status(f"Downloading {title[:40]}...")
                 log_activity(f"Downloading {title[:50]}", feed=feed_name)
+                worker_start("download")
 
                 try:
                     if resolved.type == "podcast":
@@ -435,7 +436,6 @@ async def _process_downloads_inner(config: SiphonConfig, db: Database) -> None:
                     # Decide next status based on llm_trim setting
                     ep = db.get_episode(video_id, feed_name)
                     if ep and ep["status"] == "done" and resolved.llm_trim:
-                        # Move to whisper queue
                         db.update_episode_status(video_id, feed_name, "pending_whisper")
                         logger.info("Queued %s/%s for Whisper", feed_name, video_id)
 
@@ -447,6 +447,8 @@ async def _process_downloads_inner(config: SiphonConfig, db: Database) -> None:
                         error=str(exc),
                         retry_count=episode["retry_count"] + 1,
                     )
+                finally:
+                    worker_done("download")
 
     await _prune_disk(config, db)
 
@@ -575,6 +577,7 @@ async def _process_whisper_inner(config: SiphonConfig, db: Database) -> None:
 
     set_status(f"Whisper: {title[:40]}...")
     log_activity(f"Whisper: transcribing {title[:50]}", feed=feed_name)
+    worker_start("whisper")
 
     t0 = time.time()
     loop = asyncio.get_event_loop()
@@ -663,6 +666,8 @@ async def _process_whisper_inner(config: SiphonConfig, db: Database) -> None:
                 llm_retry_count=retry_count,
                 error=str(exc),
             )
+    finally:
+        worker_done("whisper")
 
 
 # ---------------------------------------------------------------------- #
@@ -740,6 +745,7 @@ async def _process_one_claude(ep: dict, config: SiphonConfig, db: Database) -> N
     log_activity(f"Claude: processing {title[:50]}", feed=feed_name)
     set_status(f"Claude: {title[:40]}...")
     db.update_episode_status(video_id, feed_name, "pending_claude", llm_trim_status="pending")
+    worker_start("claude")
 
     try:
         with open(transcript_file, "r", encoding="utf-8") as f:
@@ -869,6 +875,8 @@ async def _process_one_claude(ep: dict, config: SiphonConfig, db: Database) -> N
                 llm_retry_count=new_retry,
             )
             log_activity(f"Claude: failed (attempt {new_retry}/3)", feed=feed_name, level="error")
+    finally:
+        worker_done("claude")
 
 
 # ---------------------------------------------------------------------- #

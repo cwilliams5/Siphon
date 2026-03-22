@@ -90,3 +90,29 @@ def get_pause_state() -> str:
     """Return current pause state: 'running', 'pending_pause', or 'paused'."""
     with _pause_lock:
         return _pause_state
+
+
+# ------------------------------------------------------------------ #
+# Active worker counters — for observability
+# ------------------------------------------------------------------ #
+
+_active_counts = {"download": 0, "whisper": 0, "claude": 0}
+_active_lock = threading.Lock()
+
+
+def worker_start(worker: str) -> None:
+    """Increment active count for a worker type."""
+    with _active_lock:
+        _active_counts[worker] = _active_counts.get(worker, 0) + 1
+
+
+def worker_done(worker: str) -> None:
+    """Decrement active count for a worker type."""
+    with _active_lock:
+        _active_counts[worker] = max(0, _active_counts.get(worker, 0) - 1)
+
+
+def get_active_counts() -> dict:
+    """Return current active worker counts."""
+    with _active_lock:
+        return dict(_active_counts)

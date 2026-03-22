@@ -6,9 +6,11 @@
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
            font-size: 0.85em; background: #16213e; color: #888; margin: 0; padding: 0; }
-    .status-bar { display: flex; gap: 16px; flex-wrap: wrap; padding: 8px 12px;
-                  border-bottom: 1px solid #333; font-size: 0.95em; }
-    .status-bar span { white-space: nowrap; }
+    .status-section { padding: 6px 12px; border-bottom: 1px solid #333; }
+    .status-section span { white-space: nowrap; }
+    .status-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0; }
+    .status-label { color: #666; min-width: 55px; }
+    .status-value { color: #aaa; }
     .log { font-family: monospace; padding: 8px 12px; }
     .error { color: #e74c3c; }
     .warning { color: #f39c12; }
@@ -17,15 +19,26 @@
 <body>
 <div style="padding:6px 12px; border-bottom:1px solid #333; color:#7c83ff; font-weight:bold;">
   {{ current_status }}
+  {% if status.pause_state != 'running' %}<span style="color:#f39c12; margin-left:12px;">[ {{ status.pause_state | replace('_', ' ') | title }} ]</span>{% endif %}
 </div>
-<div class="status-bar">
-  <span>YT: {{ status.youtube_downloads_this_hour }}/{{ status.youtube_downloads_max }}/hr</span>
-  <span>Pod: {{ status.podcast_downloads_this_hour }}/{{ status.podcast_downloads_max }}/hr</span>
-  <span>DL: {{ status.downloading_count }}</span>
-  <span>Ready: {{ status.eligible_count }}</span>
-  {% if status.whisper_queue %}<span>Whisper: {{ status.whisper_queue }}</span>{% endif %}
-  {% if status.claude_queue %}<span>Claude: {{ status.claude_queue }}</span>{% endif %}
-  {% if status.pause_state != 'running' %}<span style="color:#f39c12;">{{ status.pause_state | replace('_', ' ') | title }}</span>{% endif %}
+<div class="status-section">
+  <div class="status-row">
+    <span class="status-label">Limits:</span>
+    <span class="status-value">YT {{ status.youtube_downloads_this_hour }}/{{ status.youtube_downloads_max }}/hr</span>
+    <span class="status-value">| Pod {{ status.podcast_downloads_this_hour }}/{{ status.podcast_downloads_max }}/hr</span>
+  </div>
+  <div class="status-row">
+    <span class="status-label">Queued:</span>
+    <span class="status-value">DL {{ status.dl_queue }}</span>
+    <span class="status-value">| Whisper {{ status.whisper_queue }}</span>
+    <span class="status-value">| Claude {{ status.claude_queue }}</span>
+  </div>
+  <div class="status-row">
+    <span class="status-label">Active:</span>
+    <span class="status-value">DL {{ status.active_dl }}</span>
+    <span class="status-value">| Whisper {{ status.active_whisper }}</span>
+    <span class="status-value">| Claude {{ status.active_claude }}</span>
+  </div>
 </div>
 <div class="log">
 {% for entry in activity_log %}

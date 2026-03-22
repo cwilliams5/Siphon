@@ -114,20 +114,18 @@ def _get_feed_display(request: Request) -> list[dict]:
 
 def _get_system_status(config: SiphonConfig, db: Database) -> dict:
     """Build a summary dict of system-wide status for the dashboard."""
-    from siphon.activity import get_pause_state
+    from siphon.activity import get_active_counts, get_pause_state
 
     sched = config.schedule
     yt_recent = db.get_recent_download_count(hours=1, feed_type="youtube")
     pod_recent = db.get_recent_download_count(hours=1, feed_type="podcast")
+    active = get_active_counts()
 
     row = db.conn.execute(
         "SELECT "
-        "  SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count, "
-        "  SUM(CASE WHEN status = 'eligible' THEN 1 ELSE 0 END) AS eligible_count, "
-        "  SUM(CASE WHEN status = 'downloading' THEN 1 ELSE 0 END) AS downloading_count, "
+        "  SUM(CASE WHEN status = 'eligible' THEN 1 ELSE 0 END) AS dl_queue, "
         "  SUM(CASE WHEN status = 'pending_whisper' THEN 1 ELSE 0 END) AS whisper_queue, "
-        "  SUM(CASE WHEN status = 'pending_claude' THEN 1 ELSE 0 END) AS claude_queue, "
-        "  SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done_count "
+        "  SUM(CASE WHEN status = 'pending_claude' THEN 1 ELSE 0 END) AS claude_queue "
         "FROM episodes"
     ).fetchone()
 
@@ -136,12 +134,12 @@ def _get_system_status(config: SiphonConfig, db: Database) -> dict:
         "youtube_downloads_max": sched.youtube_max_downloads_per_hour,
         "podcast_downloads_this_hour": pod_recent,
         "podcast_downloads_max": sched.podcast_max_downloads_per_hour,
-        "pending_count": int(row["pending_count"] or 0),
-        "eligible_count": int(row["eligible_count"] or 0),
-        "downloading_count": int(row["downloading_count"] or 0),
+        "dl_queue": int(row["dl_queue"] or 0),
         "whisper_queue": int(row["whisper_queue"] or 0),
         "claude_queue": int(row["claude_queue"] or 0),
-        "done_count": int(row["done_count"] or 0),
+        "active_dl": active.get("download", 0),
+        "active_whisper": active.get("whisper", 0),
+        "active_claude": active.get("claude", 0),
         "pause_state": get_pause_state(),
     }
 
