@@ -164,52 +164,52 @@ testCookies();
 {% if insights.stale or insights.disk_hogs or insights.longest_proc or insights.most_sb or insights.most_llm or insights.highest_filter %}
 <details open data-persist="insights" style="margin-bottom:16px;">
   <summary style="cursor:pointer; color:var(--text-secondary); font-size:1.1em; margin-bottom:8px;">Insights</summary>
-  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px;">
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; align-items:stretch;">
     {% if insights.stale %}
-    <div class="card" style="padding:12px;">
-      <div style="color:var(--text-label); font-size:0.85em; margin-bottom:6px;">Most Stale Feeds</div>
+    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--error);">
+      <div class="insight-title"><i data-lucide="clock" style="width:14px;height:14px;"></i> Most Stale Feeds</div>
       {% for item in insights.stale %}
-      <div style="font-size:0.85em;">{{ item.name }} &mdash; {{ item.days_ago }}d ago</div>
+      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.days_ago }}d ago</div>
       {% endfor %}
     </div>
     {% endif %}
     {% if insights.disk_hogs %}
-    <div class="card" style="padding:12px;">
-      <div style="color:var(--text-label); font-size:0.85em; margin-bottom:6px;">Disk Hogs</div>
+    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--warning);">
+      <div class="insight-title"><i data-lucide="hard-drive" style="width:14px;height:14px;"></i> Disk Hogs</div>
       {% for item in insights.disk_hogs %}
-      <div style="font-size:0.85em;">{{ item.name }} &mdash; {{ item.size_display }}</div>
+      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.size_display }}</div>
       {% endfor %}
     </div>
     {% endif %}
     {% if insights.longest_proc %}
-    <div class="card" style="padding:12px;">
-      <div style="color:var(--text-label); font-size:0.85em; margin-bottom:6px;">Longest Processing</div>
+    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--badge-llm);">
+      <div class="insight-title"><i data-lucide="timer" style="width:14px;height:14px;"></i> Longest Processing</div>
       {% for item in insights.longest_proc %}
-      <div style="font-size:0.85em;">{{ item.title }} ({{ item.feed }}) &mdash; {{ item.time_display }}</div>
+      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.title }} ({{ item.feed }}) &mdash; {{ item.time_display }}</div>
       {% endfor %}
     </div>
     {% endif %}
     {% if insights.most_sb %}
-    <div class="card" style="padding:12px;">
-      <div style="color:var(--text-label); font-size:0.85em; margin-bottom:6px;">Most SB Cuts / Episode</div>
+    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--badge-pod);">
+      <div class="insight-title"><i data-lucide="shield-check" style="width:14px;height:14px;"></i> Most SB Cuts / Episode</div>
       {% for item in insights.most_sb %}
-      <div style="font-size:0.85em;">{{ item.name }} &mdash; {{ item.avg }} avg ({{ item.count }} eps)</div>
+      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.avg }} avg ({{ item.count }} eps)</div>
       {% endfor %}
     </div>
     {% endif %}
     {% if insights.most_llm %}
-    <div class="card" style="padding:12px;">
-      <div style="color:var(--text-label); font-size:0.85em; margin-bottom:6px;">Most LLM Cuts / Episode</div>
+    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--badge-llm);">
+      <div class="insight-title"><i data-lucide="scissors" style="width:14px;height:14px;"></i> Most LLM Cuts / Episode</div>
       {% for item in insights.most_llm %}
-      <div style="font-size:0.85em;">{{ item.name }} &mdash; {{ item.avg }} avg ({{ item.count }} eps)</div>
+      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.avg }} avg ({{ item.count }} eps)</div>
       {% endfor %}
     </div>
     {% endif %}
     {% if insights.highest_filter %}
-    <div class="card" style="padding:12px;">
-      <div style="color:var(--text-label); font-size:0.85em; margin-bottom:6px;">Highest Filter Rate</div>
+    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--warning);">
+      <div class="insight-title"><i data-lucide="filter" style="width:14px;height:14px;"></i> Highest Filter Rate</div>
       {% for item in insights.highest_filter %}
-      <div style="font-size:0.85em;">{{ item.name }} &mdash; {{ item.pct }}% ({{ item.filtered }}/{{ item.total }})</div>
+      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.pct }}% ({{ item.filtered }}/{{ item.total }})</div>
       {% endfor %}
     </div>
     {% endif %}

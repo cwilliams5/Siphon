@@ -166,6 +166,28 @@
     .hidden { display: none; }
     .btn-filter-active { background: var(--accent) !important; color: #fff !important; }
 
+    /* Insight cards */
+    .insight-card {
+      transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+    }
+    .insight-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(124, 131, 255, 0.25);
+    }
+    .insight-title {
+      color: var(--text-label);
+      font-size: 0.85em;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+    }
+    .insight-entry {
+      font-size: 0.85em;
+      padding: 2px 0;
+    }
+
     /* Theme dropdown */
     .theme-dropdown { position: relative; }
     .theme-btn { padding: 4px 8px; font-size: 0.85em; border-radius: 4px;
