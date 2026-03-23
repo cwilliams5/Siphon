@@ -6,7 +6,7 @@
 
 Self-hosted podcast pipeline that downloads YouTube channels and podcast feeds, strips ads using SponsorBlock + LLM analysis (Whisper + Claude), and serves clean RSS feeds to your podcast app over Tailscale.
 
-Built for a very specific stack: **Windows gaming rig, Tailscale Funnel, Pocket Casts, Claude Code (Max subscription), Firefox cookies for YouTube Premium**. It works great for that. If your setup is different, expect to adapt.
+Built for a very specific stack: **Youtube API key, Tailscale Funnel, Pocket Casts, Claude Code (Max subscription), Firefox cookies for YouTube Premium**. It works great for that. If your setup is different, expect to adapt.
 
 ## What it does
 
@@ -14,7 +14,7 @@ Built for a very specific stack: **Windows gaming rig, Tailscale Funnel, Pocket 
 - **Podcast feeds** &rarr; downloads audio from RSS, runs Whisper + Claude to detect and cut sponsor reads/promos/self-promotion, serves a clean RSS feed
 - **Three-queue pipeline** &rarr; Download &rarr; Whisper &rarr; Claude, each running independently with their own scheduling and concurrency
 - **Web UI** at `localhost:8585/ui/` for feed management, OPML import, live activity monitoring, stats dashboard with insights
-- **System tray icon** for pause/resume/quit with adjustable Whisper workers (runs at below-normal CPU priority for gaming)
+- **System tray icon** for pause/resume/quit with adjustable Whisper workers (runs at below-normal CPU priority)
 - **Tailscale Funnel** for HTTPS RSS serving to Pocket Casts, media served over Tailnet only (no auth needed on your network)
 - **Auto-ban** for vulnerability scanners (fail2ban-style IP blocking)
 
@@ -194,7 +194,7 @@ Available at `http://localhost:8585/ui/` (localhost only, no auth). Three themes
 - **Per-feed stats** — In RSS count, queue depths, SB/LLM cut totals
 - **Mark as Caught Up** — trims to 1 episode, sets date cutoff, cleans disk
 - **Pause/Resume** — three-state (Running / Pending Pause / Paused) with graceful drain
-- **Whisper workers** — adjustable from system tray (1-5, for gaming vs overnight processing)
+- **Whisper workers** — adjustable from system tray (1-5, for live system use vs overnight processing)
 
 ## Key config options
 
