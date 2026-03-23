@@ -220,10 +220,30 @@ def _insert_youtube_entries(entries: list, resolved, db) -> int:
                 filter_reason=reason,
             )
         else:
-            eligible_at = (
-                datetime.now(timezone.utc)
-                + timedelta(minutes=resolved.sponsorblock_delay_minutes)
-            ).strftime("%Y-%m-%d %H:%M:%S")
+            # SponsorBlock delay based on publish date, not discovery time
+            # Prefer full ISO 8601 (published_at) over YYYYMMDD (upload_date)
+            published_at = entry.get("published_at")
+            upload_str = entry.get("upload_date")
+            pub_dt = None
+            if published_at and resolved.sponsorblock_delay_minutes:
+                try:
+                    pub_dt = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+                except (ValueError, TypeError):
+                    pass
+            if pub_dt is None and upload_str and resolved.sponsorblock_delay_minutes:
+                try:
+                    pub_dt = datetime.strptime(upload_str, "%Y%m%d").replace(tzinfo=timezone.utc)
+                except (ValueError, TypeError):
+                    pass
+
+            if pub_dt is not None and resolved.sponsorblock_delay_minutes:
+                eligible_dt = pub_dt + timedelta(minutes=resolved.sponsorblock_delay_minutes)
+                if eligible_dt <= datetime.now(timezone.utc):
+                    eligible_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    eligible_at = eligible_dt.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                eligible_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
             db.insert_episode(
                 video_id=video_id,

@@ -6,6 +6,14 @@
 .stat-system { border-left: 3px solid var(--accent); }
 .stat-lifetime { border-left: 3px solid var(--badge-llm); }
 
+/* Disk progress bar */
+.disk-bar { height: 3px; border-radius: 2px; background: var(--border); margin-top: 6px; overflow: hidden; }
+.disk-bar-fill { height: 100%; border-radius: 2px; transition: width 1s ease-out; }
+
+/* Feed card entrance animation */
+.feed-card { opacity: 0; transform: translateY(12px); animation: cardIn 0.3s ease-out forwards; }
+@keyframes cardIn { to { opacity: 1; transform: translateY(0); } }
+
 /* Activity footer */
 .activity-footer {
   position: fixed;
@@ -80,6 +88,8 @@
       <i data-lucide="hard-drive" class="stat-watermark"></i>
       <div class="stat-value">{{ disk_usage_gb }} GB</div>
       <div class="stat-label">Disk / {{ max_disk_gb }} GB</div>
+      {% set pct = (disk_usage_gb / max_disk_gb * 100) | round(1) if max_disk_gb else 0 %}
+      <div class="disk-bar"><div class="disk-bar-fill" style="width:{{ pct }}%; background:{% if pct > 90 %}var(--error){% elif pct > 75 %}var(--warning){% else %}var(--success){% endif %};"></div></div>
     </div>
     <div class="stat stat-system" title="Episodes currently serving in your RSS feeds">
       <i data-lucide="rss" class="stat-watermark"></i>
@@ -234,14 +244,16 @@ testCookies();
 
 <div id="feed-list">
 {% for feed in feeds %}
-<div class="card feed-card" data-feed-type="{{ feed.feed_type }}" data-feed-name="{{ (feed.display_name or feed.name)|lower }}" data-llm="{{ feed.llm_trim }}" data-sb="{{ feed.sponsorblock }}" data-cuts="{{ feed.llm_cuts_total + feed.sb_cuts_total }}" data-last-checked="{{ feed.last_checked_at or '' }}">
+<div class="card feed-card" style="animation-delay:{{ loop.index0 * 30 }}ms;" data-feed-type="{{ feed.feed_type }}" data-feed-name="{{ (feed.display_name or feed.name)|lower }}" data-llm="{{ feed.llm_trim }}" data-sb="{{ feed.sponsorblock }}" data-cuts="{{ feed.llm_cuts_total + feed.sb_cuts_total }}" data-last-checked="{{ feed.last_checked_at or '' }}">
   <div class="feed-card-layout">
     <!-- Left: artwork -->
     <div class="feed-artwork">
       {% if feed.image_url %}
       <img src="{{ feed.image_url }}" alt="">
       {% else %}
-      <div class="feed-artwork-placeholder"><i data-lucide="radio" style="width:24px;height:24px;color:var(--text-muted);"></i></div>
+      {% set initial = (feed.display_name or feed.name)[0] %}
+      {% set colors = ['#c0392b','#2980b9','#8e44ad','#27ae60','#d35400','#2c3e50','#16a085','#e74c3c'] %}
+      <div class="feed-artwork-placeholder" style="background:{{ colors[(feed.name|length) % colors|length] }};">{{ initial }}</div>
       {% endif %}
     </div>
 
@@ -275,14 +287,14 @@ testCookies();
       <!-- Row 2: URL + last checked -->
       <div class="feed-meta">
         <span class="feed-url">{{ feed.url }}</span>
-        {% if feed.last_checked_at %}<span> &mdash; Checked {{ feed.last_checked_at }}</span>{% endif %}
+        {% if feed.checked_relative %}<span> &mdash; Checked {{ feed.checked_relative }}</span>{% endif %}
         {% if feed.last_error %}<span class="feed-error"> &mdash; Error: {{ feed.last_error }}</span>{% endif %}
       </div>
 
       <!-- Row 3: Stats chips -->
       <div class="feed-stats">
         <span class="stat-chip">{{ feed.in_rss | commafy }} in RSS</span>
-        <span class="stat-chip">{{ feed.source_count | commafy }} source</span>
+        {% if feed.feed_type == 'podcast' %}<span class="stat-chip">{{ feed.source_count | commafy }} source</span>{% endif %}
         {% if feed.llm_cuts_total %}<span class="stat-chip">{{ feed.llm_cuts_total | commafy }} LLM cuts</span>{% endif %}
         {% if feed.sb_cuts_total %}<span class="stat-chip">{{ feed.sb_cuts_total | commafy }} SB cuts</span>{% endif %}
         {% if feed.disk_usage_mb %}<span class="stat-chip">{{ feed.disk_usage_display }}</span>{% endif %}
@@ -580,6 +592,32 @@ function fetchActivityLog() {
 initActivityState();
 fetchActivityLog();
 setInterval(fetchActivityLog, 5000);
+
+/* Count-up animation for stat values */
+document.querySelectorAll('.stat-value').forEach(function(el) {
+  var text = el.textContent.trim();
+  /* Extract numeric part: handle "58.5 GB", "3:29", "5,364", plain numbers */
+  var match = text.match(/^([\d,]+(?:\.\d+)?)/);
+  if (!match) return;
+  var raw = match[1].replace(/,/g, '');
+  var target = parseFloat(raw);
+  if (isNaN(target) || target === 0) return;
+  var suffix = text.slice(match[0].length);
+  var hasCommas = match[1].includes(',');
+  var decimals = match[1].includes('.') ? match[1].split('.')[1].length : 0;
+  var duration = 800;
+  var start = performance.now();
+  function step(now) {
+    var t = Math.min((now - start) / duration, 1);
+    t = 1 - Math.pow(1 - t, 3); /* ease-out cubic */
+    var val = target * t;
+    var display = decimals ? val.toFixed(decimals) : Math.round(val).toString();
+    if (hasCommas) display = parseInt(display).toLocaleString() + (decimals ? '.' + val.toFixed(decimals).split('.')[1] : '');
+    el.textContent = display + suffix;
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+});
 
 /* Re-render Lucide icons after dynamic content */
 if (typeof lucide !== 'undefined') lucide.createIcons();

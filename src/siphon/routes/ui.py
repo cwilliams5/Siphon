@@ -85,7 +85,7 @@ def _get_feed_display(request: Request) -> list[dict]:
         sb_cuts_total = 0
         llm_cuts_total = 0
         disk_bytes = 0
-        source_count = 0
+        source_count = len(episodes)
         latest_done_date = None
         for ep in episodes:
             s = ep["status"]
@@ -110,9 +110,6 @@ def _get_feed_display(request: Request) -> list[dict]:
             # Disk usage: sum file_size for non-pruned, non-filtered episodes
             if s not in ("filtered", "pruned"):
                 disk_bytes += ep.get("file_size") or 0
-            # Source count: all episodes except filtered
-            if s != "filtered":
-                source_count += 1
 
         # Compute disk usage display
         disk_usage_mb = round(disk_bytes / (1024 * 1024), 1)
@@ -131,6 +128,25 @@ def _get_feed_display(request: Request) -> list[dict]:
                 latest_episode_date = "\u2014"
         else:
             latest_episode_date = None
+
+        # Compute relative checked time
+        last_checked_raw = db_feed.get("last_checked_at")
+        checked_relative = None
+        if last_checked_raw:
+            try:
+                checked_dt = datetime.strptime(last_checked_raw, "%Y-%m-%d %H:%M:%S")
+                delta = datetime.now() - checked_dt
+                total_mins = int(delta.total_seconds() / 60)
+                if total_mins < 1:
+                    checked_relative = "just now"
+                elif total_mins < 60:
+                    checked_relative = f"{total_mins}m ago"
+                elif total_mins < 1440:
+                    checked_relative = f"{total_mins // 60}h ago"
+                else:
+                    checked_relative = f"{total_mins // 1440}d ago"
+            except (ValueError, TypeError):
+                checked_relative = last_checked_raw
 
         feeds_display.append({
             "name": fc.name,
@@ -152,6 +168,7 @@ def _get_feed_display(request: Request) -> list[dict]:
             "pc_url": resolved.pc_url,
             "image_url": db_feed.get("image_url"),
             "last_checked_at": db_feed.get("last_checked_at"),
+            "checked_relative": checked_relative,
             "last_error": db_feed.get("last_error"),
             "episode_counts": status_counts,
             "in_rss": in_rss,

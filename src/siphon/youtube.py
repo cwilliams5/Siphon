@@ -188,6 +188,7 @@ def list_videos(
                 "title": snippet.get("title", ""),
                 "description": snippet.get("description", ""),
                 "upload_date": upload_date,
+                "published_at": published,  # full ISO 8601 for precise delay calc
                 "thumbnail": thumb_url,
                 "url": f"https://www.youtube.com/watch?v={video_id}",
                 "channel": snippet.get("channelTitle", ""),

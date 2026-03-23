@@ -182,8 +182,9 @@ class TestCheckFeeds:
     @patch("siphon.youtube.resolve_channel_id", return_value="UC_TEST")
     @patch("siphon.youtube.get_channel_metadata", return_value={})
     @patch("siphon.youtube.list_videos")
-    async def test_check_feeds_sets_eligible_at(self, mock_list, mock_meta, mock_resolve, config, db):
-        mock_list.return_value = [_sample_entries()[0]]
+    async def test_check_feeds_sets_eligible_at_old_video(self, mock_list, mock_meta, mock_resolve, config, db):
+        """Old videos (publish + delay already passed) should be eligible immediately."""
+        mock_list.return_value = [_sample_entries()[0]]  # upload_date="20250601"
 
         before = datetime.now(timezone.utc)
         await check_feeds(config, db)
@@ -194,10 +195,39 @@ class TestCheckFeeds:
         assert ep["eligible_at"] is not None
 
         eligible_at = datetime.fromisoformat(ep["eligible_at"]).replace(tzinfo=timezone.utc)
+        # Old video: publish + delay is in the past, so eligible_at ≈ now
+        assert eligible_at >= before - timedelta(seconds=5)
+        assert eligible_at <= after + timedelta(seconds=5)
+
+    @patch("siphon.youtube.resolve_channel_id", return_value="UC_TEST")
+    @patch("siphon.youtube.get_channel_metadata", return_value={})
+    @patch("siphon.youtube.list_videos")
+    async def test_check_feeds_sets_eligible_at_fresh_video(self, mock_list, mock_meta, mock_resolve, config, db):
+        """Fresh videos should be eligible at publish_date + sponsorblock_delay."""
+        # Use a large delay so publish_date + delay is guaranteed to be in the future
+        config.defaults.sponsorblock_delay_minutes = 99999
+        now = datetime.now(timezone.utc)
+        published_at = now.strftime("%Y-%m-%dT%H:%M:%SZ")
+        today = now.strftime("%Y%m%d")
+        entry = {
+            **_sample_entries()[0],
+            "id": "vid_fresh",
+            "upload_date": today,
+            "published_at": published_at,
+        }
+        mock_list.return_value = [entry]
+
+        await check_feeds(config, db)
+
+        ep = db.get_episode("vid_fresh", "test-feed")
+        assert ep is not None
+        assert ep["eligible_at"] is not None
+
+        eligible_at = datetime.fromisoformat(ep["eligible_at"]).replace(tzinfo=timezone.utc)
         delay = timedelta(minutes=config.defaults.sponsorblock_delay_minutes)
-        # eligible_at should be approximately now + delay
-        assert eligible_at >= before + delay - timedelta(seconds=5)
-        assert eligible_at <= after + delay + timedelta(seconds=5)
+        # eligible_at should be approximately published_at + delay (using full timestamp)
+        assert eligible_at >= now + delay - timedelta(seconds=5)
+        assert eligible_at <= now + delay + timedelta(seconds=5)
 
     @patch("siphon.youtube.resolve_channel_id", return_value="UC_TEST")
     @patch("siphon.youtube.get_channel_metadata", return_value={})
