@@ -11,13 +11,6 @@
         <input type="text" name="url" placeholder="https://www.youtube.com/@Channel or https://podcast.com/rss" style="width:100%;" required
                value="{{ prefill.url or '' }}">
       </div>
-      <div class="form-group">
-        <label>Type</label>
-        <select name="type" id="feed-type">
-          <option value="youtube" {% if prefill.type == 'youtube' %}selected{% endif %}>YouTube</option>
-          <option value="podcast" {% if prefill.type == 'podcast' %}selected{% endif %}>Podcast</option>
-        </select>
-      </div>
     </div>
     <div class="form-row">
       <div class="form-group">

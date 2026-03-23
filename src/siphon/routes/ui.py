@@ -586,7 +586,7 @@ async def add_feed_submit(
     request: Request,
     url: str = Form(...),
     name: str = Form(...),
-    type: str = Form("youtube"),
+    type: str = Form(""),
     mode: str = Form(""),
     quality: str = Form(""),
     sponsorblock: str = Form(""),
@@ -607,6 +607,15 @@ async def add_feed_submit(
 
     # Sanitize inputs
     url = url.strip()
+
+    # Auto-detect feed type from URL
+    if not type:
+        url_lower = url.lower()
+        if any(d in url_lower for d in ("youtube.com", "youtu.be", "m.youtube.com")):
+            type = "youtube"
+        else:
+            type = "podcast"
+
     name = _slugify(name) if name else _slugify(url.split("/")[-1])
     if not name:
         name = f"feed-{len(config.feeds)}"
