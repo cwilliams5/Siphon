@@ -16,6 +16,7 @@ Built for a very specific stack: **Youtube API key, Tailscale Funnel, Pocket Cas
 - **Web UI** at `localhost:8585/ui/` for feed management, OPML import, live activity monitoring, stats dashboard with insights
 - **System tray icon** for pause/resume/quit with adjustable Whisper workers (runs at below-normal CPU priority)
 - **Tailscale Funnel** for HTTPS RSS serving to Pocket Casts, media served over Tailnet only (no auth needed on your network)
+- **Per-feed control** &rarr; toggle SponsorBlock, LLM trim, short blocking per feed; filter by title, duration, date; supplement or fully replace the Claude prompt per feed
 - **Auto-ban** for vulnerability scanners (fail2ban-style IP blocking)
 
 ## Architecture
