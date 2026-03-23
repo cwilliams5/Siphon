@@ -35,7 +35,7 @@ flowchart TB
     end
 
     subgraph Whisper Worker
-        WHISPER[faster-whisper<br/>CUDA or CPU<br/>Word-level timestamps<br/>Singleton model, 1 at a time]
+        WHISPER[faster-whisper<br/>CUDA: 1 worker / CPU: 1-5 workers<br/>Word-level timestamps<br/>Singleton model, shared weights]
     end
 
     subgraph Claude Worker
@@ -82,7 +82,7 @@ The pipeline uses three independent workers, each running on their own schedule:
 | Worker | Interval | Concurrency | What it does |
 |--------|----------|-------------|-------------|
 | **Download** | 5 min | Sequential (rate limited) | Downloads media, applies SponsorBlock for YouTube |
-| **Whisper** | 30 sec | 1 (singleton model) | Transcribes audio with word-level timestamps. CUDA GPU or CPU. |
+| **Whisper** | 30 sec | CUDA: 1 / CPU: 1-5 (configurable) | Transcribes audio with word-level timestamps. Singleton model, shared weights. |
 | **Claude** | 30 sec | 3 concurrent (configurable) | Detects ad segments, applies ffmpeg cuts |
 
 Episodes flow through: `eligible` &rarr; `downloading` &rarr; `pending_whisper` &rarr; `pending_claude` &rarr; `done`
