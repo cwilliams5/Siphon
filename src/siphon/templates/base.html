@@ -145,10 +145,25 @@
     .flash-info { background: var(--flash-info); }
     .status-bar { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
     .stat { background: var(--bg-card); padding: 12px 20px; border-radius: 8px; text-align: center;
-            transition: transform 0.1s; }
-    .stat:hover { transform: scale(1.03); }
-    .stat-value { font-size: 1.4em; font-weight: bold; color: var(--text-heading); }
-    .stat-label { font-size: 0.8em; color: var(--text-secondary); margin-top: 2px; }
+            position: relative; overflow: hidden;
+            transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+            border: 1px solid transparent; }
+    .stat:hover { transform: translateY(-2px); border-color: var(--accent);
+                  box-shadow: 0 4px 12px rgba(124, 131, 255, 0.25); }
+    .stat-watermark {
+      position: absolute;
+      width: 48px !important;
+      height: 48px !important;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      opacity: 0.25;
+      color: var(--text-muted);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .stat-value { font-size: 1.4em; font-weight: bold; color: var(--text-heading); position: relative; z-index: 1; }
+    .stat-label { font-size: 0.8em; color: var(--text-secondary); margin-top: 2px; position: relative; z-index: 1; }
     .hidden { display: none; }
     .btn-filter-active { background: var(--accent) !important; color: #fff !important; }
 

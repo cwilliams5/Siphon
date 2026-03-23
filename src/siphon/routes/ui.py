@@ -18,9 +18,14 @@ from siphon.db import Database
 router = APIRouter(prefix="/ui")
 
 # Serve static images (logo, icons)
-_img_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "..", "img")
-if os.path.isdir(_img_dir):
-    router.mount("/img", StaticFiles(directory=_img_dir), name="ui-img")
+_possible_img_dirs = [
+    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "img"),
+    os.path.join(os.getcwd(), "img"),
+]
+for _d in _possible_img_dirs:
+    if os.path.isdir(_d):
+        router.mount("/img", StaticFiles(directory=_d), name="ui-img")
+        break
 
 templates = Jinja2Templates(
     directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")
@@ -283,9 +288,6 @@ async def feeds_page(request: Request):
     # Insights
     insights = _compute_insights(db, config)
 
-    # Sparkline data (last 30 days)
-    sparklines = _get_sparkline_data(db)
-
     # Build auth-embedded base URL for RSS links
     # https://user:pass@host/feed/name
     from urllib.parse import urlparse
@@ -307,7 +309,6 @@ async def feeds_page(request: Request):
         "avg_processing_display": avg_processing_display,
         "status": status,
         "insights": insights,
-        "sparklines": sparklines,
         "auth_base_url": auth_base_url,
         "messages": _get_messages(request),
     })
@@ -354,36 +355,6 @@ async def check_now(request: Request):
     task.add_done_callback(_get_background_tasks(request.app).discard)
 
     return RedirectResponse("/ui/", status_code=303)
-
-
-def _get_sparkline_data(db: Database) -> dict:
-    """Get daily counts for sparkline charts over the last 30 days."""
-    processed = db.conn.execute(
-        "SELECT date(updated_at) as d, COUNT(*) as cnt "
-        "FROM episodes WHERE status = 'done' "
-        "AND updated_at >= date('now', '-30 days') "
-        "GROUP BY d ORDER BY d"
-    ).fetchall()
-
-    cuts = db.conn.execute(
-        "SELECT date(updated_at) as d, COALESCE(SUM(llm_cuts_applied), 0) as cnt "
-        "FROM episodes WHERE llm_cuts_applied IS NOT NULL "
-        "AND updated_at >= date('now', '-30 days') "
-        "GROUP BY d ORDER BY d"
-    ).fetchall()
-
-    words = db.conn.execute(
-        "SELECT date(updated_at) as d, COALESCE(SUM(whisper_word_count), 0) as cnt "
-        "FROM episodes WHERE whisper_word_count IS NOT NULL "
-        "AND updated_at >= date('now', '-30 days') "
-        "GROUP BY d ORDER BY d"
-    ).fetchall()
-
-    return {
-        "processed": [{"d": r["d"], "v": r["cnt"]} for r in processed],
-        "cuts": [{"d": r["d"], "v": r["cnt"]} for r in cuts],
-        "words": [{"d": r["d"], "v": r["cnt"]} for r in words],
-    }
 
 
 def _compute_insights(db: Database, config) -> dict:
