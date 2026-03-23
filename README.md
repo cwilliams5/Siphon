@@ -224,7 +224,7 @@ Available at `http://localhost:8585/ui/` (localhost only, no auth). Three themes
 | `schedule` | `check_interval_minutes` | `30` | How often to check for new episodes |
 | `schedule` | `youtube_max_downloads_per_hour` | `10` | YouTube download rate limit |
 | `schedule` | `podcast_max_downloads_per_hour` | `120` | Podcast download rate limit |
-| `defaults` | `sponsorblock_delay_minutes` | `4320` | Wait for SB segments to be crowdsourced |
+| `defaults` | `sponsorblock_delay_minutes` | `1440` | Wait for SB segments to be crowdsourced |
 | `defaults` | `llm_trim` | `false` | Enable Whisper + Claude ad detection |
 | `llm` | `whisper_model` | `base` | Whisper model size (tiny/base/small/medium/large) |
 | `llm` | `whisper_device` | `cpu` | Whisper device (`cpu` or `cuda`) |
@@ -243,7 +243,7 @@ Every feed can override the defaults above. Set these in `config.yaml` under eac
 | Key | Default | Description |
 |-----|---------|-------------|
 | `sponsorblock` | `true` | Enable/disable SponsorBlock segment removal (YouTube only) |
-| `sponsorblock_delay_minutes` | `4320` | Wait time after publish for SB segments to be crowdsourced |
+| `sponsorblock_delay_minutes` | `1440` | Wait time after publish for SB segments to be crowdsourced |
 | `llm_trim` | `false` | Enable Whisper + Claude ad detection for this feed |
 | `quality` | `1440` | YouTube video quality (`1440`, `1080`, or `max`) |
 | `block_shorts` | `true` | Filter out YouTube Shorts (< 60s) |

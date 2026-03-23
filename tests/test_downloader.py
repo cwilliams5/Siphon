@@ -36,7 +36,7 @@ def video_feed() -> ResolvedFeed:
         quality=1080,
         sponsorblock=False,
         sponsorblock_categories=["sponsor"],
-        sponsorblock_delay_minutes=4320,
+        sponsorblock_delay_minutes=1440,
 
         block_shorts=True,
         min_duration_seconds=60,
@@ -56,7 +56,7 @@ def audio_feed() -> ResolvedFeed:
         quality=1440,
         sponsorblock=False,
         sponsorblock_categories=["sponsor"],
-        sponsorblock_delay_minutes=4320,
+        sponsorblock_delay_minutes=1440,
 
         block_shorts=True,
         min_duration_seconds=60,
@@ -76,7 +76,7 @@ def sponsorblock_feed() -> ResolvedFeed:
         quality=720,
         sponsorblock=True,
         sponsorblock_categories=["sponsor", "selfpromo"],
-        sponsorblock_delay_minutes=4320,
+        sponsorblock_delay_minutes=1440,
 
         block_shorts=True,
         min_duration_seconds=60,
@@ -96,7 +96,7 @@ def max_quality_feed() -> ResolvedFeed:
         quality="max",
         sponsorblock=False,
         sponsorblock_categories=["sponsor"],
-        sponsorblock_delay_minutes=4320,
+        sponsorblock_delay_minutes=1440,
 
         block_shorts=True,
         min_duration_seconds=60,

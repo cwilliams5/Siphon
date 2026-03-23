@@ -127,7 +127,7 @@ class FeedDefaults(BaseModel):
         "intro",
         "outro",
     ]
-    sponsorblock_delay_minutes: int = 4320
+    sponsorblock_delay_minutes: int = 1440
     block_shorts: bool = True
     min_duration_seconds: int = 60
     date_cutoff: str | None = None

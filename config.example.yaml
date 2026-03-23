@@ -59,7 +59,7 @@ defaults:
     - interaction
     - intro
     - outro
-  sponsorblock_delay_minutes: 4320
+  sponsorblock_delay_minutes: 1440
   block_shorts: true
   min_duration_seconds: 60
   date_cutoff: null

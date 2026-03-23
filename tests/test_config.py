@@ -181,7 +181,7 @@ class TestResolveFeed:
         assert resolved.quality == 1080
         assert resolved.mode == "video"
         assert resolved.sponsorblock is True
-        assert resolved.sponsorblock_delay_minutes == 4320
+        assert resolved.sponsorblock_delay_minutes == 1440
         assert resolved.block_shorts is True
         assert resolved.min_duration_seconds == 60
         assert resolved.date_cutoff is None

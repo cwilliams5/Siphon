@@ -675,7 +675,7 @@ async def feed_action(
     quality: str = Form("1440"),
     sponsorblock: str = Form("true"),
     sponsorblock_categories: str = Form(""),
-    sponsorblock_delay_minutes: int = Form(4320),
+    sponsorblock_delay_minutes: int = Form(1440),
     block_shorts: str = Form("true"),
     min_duration_seconds: int = Form(60),
     llm_trim: str = Form("false"),
