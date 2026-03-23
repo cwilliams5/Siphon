@@ -215,6 +215,7 @@ def _insert_youtube_entries(entries: list, resolved, db) -> int:
                 upload_date=entry.get("upload_date"),
                 eligible_at=None,
                 status="filtered",
+                filter_reason=reason,
             )
         else:
             eligible_at = (
@@ -291,6 +292,7 @@ async def _check_podcast_feed(resolved, db) -> None:
                 upload_date=ep.get("pub_date"),
                 eligible_at=None,
                 status="filtered",
+                filter_reason=reason,
             )
         else:
             # Podcasts don't need SponsorBlock delay — eligible immediately
@@ -655,6 +657,7 @@ async def _process_one_whisper(ep: dict, config: SiphonConfig, db: Database) -> 
             whisper_segment_count=segment_count,
             transcript_size_bytes=len(transcript_json),
             whisper_model=config.llm.whisper_model,
+            whisper_device=config.llm.whisper_device,
         )
 
         _fmt_time = _format_duration(whisper_duration)

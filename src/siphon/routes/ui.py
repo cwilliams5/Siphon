@@ -416,10 +416,11 @@ def _compute_insights(db: Database, config) -> dict:
             "count": row["ep_count"],
         })
 
-    # Highest filter rate (top 3 feeds by ratio of filtered to total)
+    # Highest filter rate — only non-date filters (too_short, short, title_match)
     filter_rows = db.conn.execute(
         "SELECT feed_name, "
-        "  SUM(CASE WHEN status = 'filtered' THEN 1 ELSE 0 END) AS filtered, "
+        "  SUM(CASE WHEN status = 'filtered' AND filter_reason IS NOT NULL "
+        "       AND filter_reason NOT IN ('too_old', 'unknown_date') THEN 1 ELSE 0 END) AS filtered, "
         "  COUNT(*) AS total "
         "FROM episodes "
         "GROUP BY feed_name "

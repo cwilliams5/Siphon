@@ -39,6 +39,15 @@ CREATE TABLE IF NOT EXISTS episodes (
     llm_cuts_applied INTEGER,
     llm_retry_count INTEGER NOT NULL DEFAULT 0,
     sb_cuts_applied INTEGER,
+    filter_reason   TEXT,
+    whisper_device  TEXT,
+    whisper_duration_seconds REAL,
+    claude_duration_seconds REAL,
+    ffmpeg_duration_seconds REAL,
+    whisper_word_count INTEGER,
+    whisper_segment_count INTEGER,
+    transcript_size_bytes INTEGER,
+    whisper_model   TEXT,
     updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (video_id, feed_name)
 );
@@ -63,6 +72,10 @@ MIGRATIONS = [
     "ALTER TABLE feeds ADD COLUMN channel_id TEXT",
     # Add llm_retry_count for LLM error retry tracking
     "ALTER TABLE episodes ADD COLUMN llm_retry_count INTEGER NOT NULL DEFAULT 0",
+    # Add filter_reason for distinguishing filter types
+    "ALTER TABLE episodes ADD COLUMN filter_reason TEXT",
+    # Add whisper_device for CPU vs CUDA tracking
+    "ALTER TABLE episodes ADD COLUMN whisper_device TEXT",
     # Pipeline split: per-stage timing and metrics
     "ALTER TABLE episodes ADD COLUMN whisper_duration_seconds REAL",
     "ALTER TABLE episodes ADD COLUMN claude_duration_seconds REAL",
@@ -192,12 +205,13 @@ class Database:
         upload_date: str | None = None,
         eligible_at: str | None = None,
         status: str = "pending",
+        filter_reason: str | None = None,
     ) -> None:
         self.conn.execute(
             """INSERT OR IGNORE INTO episodes
                (video_id, feed_name, title, description, thumbnail_url,
-                channel_name, duration, upload_date, eligible_at, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                channel_name, duration, upload_date, eligible_at, status, filter_reason)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 video_id,
                 feed_name,
@@ -209,6 +223,7 @@ class Database:
                 upload_date,
                 eligible_at,
                 status,
+                filter_reason,
             ),
         )
         self.conn.commit()
