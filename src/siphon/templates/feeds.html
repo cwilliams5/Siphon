@@ -3,7 +3,8 @@
 {% block content %}
 <h1>Feeds</h1>
 
-<div class="status-bar">
+<div style="color:#666; font-size:0.75em; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">System</div>
+<div class="status-bar" style="margin-bottom:12px;">
   <div class="stat">
     <div class="stat-value">{{ feeds | selectattr('feed_type', 'equalto', 'podcast') | list | length }}</div>
     <div class="stat-label">Podcasts</div>
@@ -14,7 +15,7 @@
   </div>
   <div class="stat">
     <div class="stat-value">{{ disk_usage_gb }} GB</div>
-    <div class="stat-label">Disk Used / {{ max_disk_gb }} GB</div>
+    <div class="stat-label">Disk / {{ max_disk_gb }} GB</div>
   </div>
   <div class="stat">
     <div class="stat-value">{{ status.done_count | commafy }}</div>
@@ -24,6 +25,17 @@
     <div class="stat-value">{{ total_episodes | commafy }}</div>
     <div class="stat-label">Source Episodes</div>
   </div>
+  <div class="stat" id="yt-cookie-status" style="cursor:pointer;" onclick="testCookies()">
+    <div class="stat-value" id="yt-cookie-icon">?</div>
+    <div class="stat-label">YouTube Login</div>
+  </div>
+  <form method="post" action="/ui/check-now" style="display:flex; align-items:center;">
+    <button type="submit" class="btn btn-small">Check Feeds Now</button>
+  </form>
+</div>
+
+<div style="color:#666; font-size:0.75em; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Lifetime</div>
+<div class="status-bar">
   <div class="stat">
     <div class="stat-value">{{ total_llm_cuts | commafy }}</div>
     <div class="stat-label">LLM Cuts</div>
@@ -33,12 +45,12 @@
     <div class="stat-label">SB Cuts</div>
   </div>
   <div class="stat">
-    <div class="stat-value">{{ avg_processing_display }}</div>
-    <div class="stat-label">Avg Process</div>
-  </div>
-  <div class="stat">
     <div class="stat-value">{{ total_words | commafy }}</div>
     <div class="stat-label">Words Processed</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">{{ avg_processing_display }}</div>
+    <div class="stat-label">Avg Process</div>
   </div>
   <div class="stat">
     <div class="stat-value">{{ purged_count | commafy }}</div>
@@ -48,13 +60,6 @@
     <div class="stat-value">{{ crap_filtered | commafy }}</div>
     <div class="stat-label">Crap Filtered</div>
   </div>
-  <div class="stat" id="yt-cookie-status" style="cursor:pointer;" onclick="testCookies()">
-    <div class="stat-value" id="yt-cookie-icon">?</div>
-    <div class="stat-label">YouTube Login</div>
-  </div>
-  <form method="post" action="/ui/check-now" style="display:flex; align-items:center;">
-    <button type="submit" class="btn btn-small">Check Feeds Now</button>
-  </form>
 </div>
 
 <script>
