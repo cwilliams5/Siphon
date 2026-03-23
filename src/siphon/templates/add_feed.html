@@ -31,28 +31,28 @@
       <div class="form-group">
         <label>Mode</label>
         <select name="mode">
-          <option value="" {% if not prefill.mode %}selected{% endif %}>Default</option>
+          <option value="" {% if not prefill.mode %}selected{% endif %}>Default ({{ defaults.mode }})</option>
           <option value="video" {% if prefill.mode == 'video' %}selected{% endif %}>Video</option>
           <option value="audio" {% if prefill.mode == 'audio' %}selected{% endif %}>Audio</option>
         </select>
       </div>
       <div class="form-group">
         <label>Quality</label>
-        <input type="text" name="quality" placeholder="1440 or max" value="{{ prefill.quality or '' }}">
+        <input type="text" name="quality" placeholder="Default: {{ defaults.quality }}" value="{{ prefill.quality or '' }}">
       </div>
     </div>
     <div class="form-row">
       <div class="form-group">
         <label>SponsorBlock</label>
         <select name="sponsorblock">
-          <option value="" {% if not prefill.sponsorblock %}selected{% endif %}>Default</option>
+          <option value="" {% if not prefill.sponsorblock %}selected{% endif %}>Default ({{ "On" if defaults.sponsorblock else "Off" }})</option>
           <option value="true" {% if prefill.sponsorblock == 'true' %}selected{% endif %}>On</option>
           <option value="false" {% if prefill.sponsorblock == 'false' %}selected{% endif %}>Off</option>
         </select>
       </div>
       <div class="form-group">
         <label>SponsorBlock Categories</label>
-        <input type="text" name="sponsorblock_categories" placeholder="sponsor, selfpromo, interaction" value="{{ prefill.sponsorblock_categories or '' }}">
+        <input type="text" name="sponsorblock_categories" placeholder="Default: {{ defaults.sponsorblock_categories | join(', ') }}" value="{{ prefill.sponsorblock_categories or '' }}">
       </div>
       <div class="form-group">
         <label>SponsorBlock Delay (min)</label>
@@ -63,7 +63,7 @@
       <div class="form-group">
         <label>Block Shorts</label>
         <select name="block_shorts">
-          <option value="" {% if not prefill.block_shorts %}selected{% endif %}>Default</option>
+          <option value="" {% if not prefill.block_shorts %}selected{% endif %}>Default ({{ "On" if defaults.block_shorts else "Off" }})</option>
           <option value="true" {% if prefill.block_shorts == 'true' %}selected{% endif %}>On</option>
           <option value="false" {% if prefill.block_shorts == 'false' %}selected{% endif %}>Off</option>
         </select>
@@ -81,7 +81,7 @@
       <div class="form-group">
         <label>LLM Trim</label>
         <select name="llm_trim">
-          <option value="" {% if not prefill.llm_trim %}selected{% endif %}>Default</option>
+          <option value="" {% if not prefill.llm_trim %}selected{% endif %}>Default ({{ "On" if defaults.llm_trim else "Off" }})</option>
           <option value="true" {% if prefill.llm_trim == 'true' %}selected{% endif %}>On</option>
           <option value="false" {% if prefill.llm_trim == 'false' %}selected{% endif %}>Off</option>
         </select>
