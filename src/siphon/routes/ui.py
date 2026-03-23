@@ -252,6 +252,16 @@ async def feeds_page(request: Request):
     ).fetchone()
     total_words = int(words_row["total_words"])
 
+    extra_stats = db.conn.execute(
+        "SELECT "
+        "  SUM(CASE WHEN status = 'pruned' THEN 1 ELSE 0 END) AS purged, "
+        "  SUM(CASE WHEN status = 'filtered' AND filter_reason IS NOT NULL "
+        "       AND filter_reason NOT IN ('too_old', 'unknown_date') THEN 1 ELSE 0 END) AS crap_filtered "
+        "FROM episodes"
+    ).fetchone()
+    purged_count = int(extra_stats["purged"] or 0)
+    crap_filtered = int(extra_stats["crap_filtered"] or 0)
+
     # Insights
     insights = _compute_insights(db, config)
 
@@ -271,6 +281,8 @@ async def feeds_page(request: Request):
         "total_llm_cuts": total_llm_cuts,
         "total_sb_cuts": total_sb_cuts,
         "total_words": total_words,
+        "purged_count": purged_count,
+        "crap_filtered": crap_filtered,
         "avg_processing_display": avg_processing_display,
         "status": status,
         "insights": insights,

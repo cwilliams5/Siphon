@@ -40,6 +40,14 @@
     <div class="stat-value">{{ total_words | commafy }}</div>
     <div class="stat-label">Words Processed</div>
   </div>
+  <div class="stat">
+    <div class="stat-value">{{ purged_count | commafy }}</div>
+    <div class="stat-label">Purged Complete</div>
+  </div>
+  <div class="stat">
+    <div class="stat-value">{{ crap_filtered | commafy }}</div>
+    <div class="stat-label">Crap Filtered</div>
+  </div>
   <div class="stat" id="yt-cookie-status" style="cursor:pointer;" onclick="testCookies()">
     <div class="stat-value" id="yt-cookie-icon">?</div>
     <div class="stat-label">YouTube Login</div>
