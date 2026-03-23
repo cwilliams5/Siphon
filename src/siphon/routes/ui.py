@@ -17,15 +17,15 @@ from siphon.db import Database
 
 router = APIRouter(prefix="/ui")
 
-# Serve static images (logo, icons)
-_possible_img_dirs = [
-    os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "img"),
-    os.path.join(os.getcwd(), "img"),
-]
-for _d in _possible_img_dirs:
-    if os.path.isdir(_d):
-        router.mount("/img", StaticFiles(directory=_d), name="ui-img")
-        break
+def get_img_dir() -> str | None:
+    """Find the img directory for static logo files."""
+    for d in [
+        os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "img"),
+        os.path.join(os.getcwd(), "img"),
+    ]:
+        if os.path.isdir(d):
+            return d
+    return None
 
 templates = Jinja2Templates(
     directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")

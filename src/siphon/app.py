@@ -159,7 +159,7 @@ def create_app(config: SiphonConfig) -> FastAPI:
     from siphon.routes.feeds import router as feeds_router
     from siphon.routes.media import router as media_router
     from siphon.routes.api import router as api_router
-    from siphon.routes.ui import router as ui_router
+    from siphon.routes.ui import router as ui_router, get_img_dir
 
     # RSS and API routes require auth
     app.include_router(feeds_router, dependencies=[Depends(auth_dep)])
@@ -170,6 +170,12 @@ def create_app(config: SiphonConfig) -> FastAPI:
 
     # Web UI — localhost only, no auth needed
     app.include_router(ui_router)
+
+    # Static images (logo, icons) — must mount on app, not router
+    from starlette.staticfiles import StaticFiles
+    img_dir = get_img_dir()
+    if img_dir:
+        app.mount("/ui/img", StaticFiles(directory=img_dir), name="ui-img")
 
     # --- Security middleware ---
     # Track bad requests per IP for auto-banning
