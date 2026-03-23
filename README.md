@@ -99,6 +99,17 @@ Episodes only appear in RSS after the full pipeline completes. Feeds without LLM
 
 For episodes longer than 45 minutes, word timestamps are omitted to stay within context limits (configurable).
 
+### How ffmpeg cuts work
+
+Claude returns all ad segments with timestamps referencing the **original file**. Rather than cutting sequentially (which would shift timestamps after each cut), ffmpeg inverts the cut list into keep-ranges:
+
+1. Sort all ad segments by start time and merge overlaps
+2. Invert to get the **keep ranges** — the gaps between ads
+3. Extract each keep range from the original file with `-ss`/`-to` and `-c copy` (stream copy, no re-encode)
+4. Concatenate all kept pieces via ffmpeg concat demuxer
+
+Every extraction reads from the untouched original, so timestamps never shift. The entire operation is stream-copy — no audio/video re-encoding, so it's fast regardless of file size.
+
 ### YouTube integration
 
 - **Discovery**: YouTube Data API v3 `playlistItems.list` at 1 unit per 50 videos (500,000 videos/day capacity)
