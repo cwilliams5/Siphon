@@ -60,6 +60,11 @@ def _get_background_tasks(app) -> set:
     return app.state._background_tasks
 
 
+def _normalize_date_cutoff(val: str) -> str:
+    """Convert YYYY-MM-DD (from date picker) to YYYYMMDD."""
+    return val.replace("-", "") if val else val
+
+
 def _slugify(name: str) -> str:
     s = name.lower().strip()
     s = re.sub(r"[^\w\s-]", "", s)
@@ -652,7 +657,7 @@ async def add_feed_submit(
     if llm_trim:
         feed_data["llm_trim"] = llm_trim == "true"
     if date_cutoff:
-        feed_data["date_cutoff"] = date_cutoff
+        feed_data["date_cutoff"] = _normalize_date_cutoff(date_cutoff)
     if title_exclude:
         feed_data["title_exclude"] = [t.strip() for t in title_exclude.split(",") if t.strip()]
     if claude_prompt_extra:
@@ -742,7 +747,7 @@ def _do_update(config, feed_name, mode, quality, sponsorblock,
                 "block_shorts": block_shorts == "true",
                 "min_duration_seconds": min_duration_seconds,
                 "llm_trim": llm_trim == "true",
-                "date_cutoff": date_cutoff if date_cutoff else None,
+                "date_cutoff": _normalize_date_cutoff(date_cutoff) if date_cutoff else None,
                 "title_exclude": [t.strip() for t in title_exclude.split(",") if t.strip()],
                 "claude_prompt_extra": claude_prompt_extra if claude_prompt_extra else None,
                 "claude_prompt_override": claude_prompt_override if claude_prompt_override else None,
@@ -973,7 +978,7 @@ async def import_confirm(request: Request):
         if not name:
             name = f"podcast-{i}"
 
-        date_cutoff = form.get(f"date_cutoff_{i}", "").strip() or None
+        date_cutoff = _normalize_date_cutoff(form.get(f"date_cutoff_{i}", "").strip()) or None
         llm_trim_str = form.get(f"llm_trim_{i}", "").strip()
         title_exclude_str = form.get(f"title_exclude_{i}", "").strip()
 

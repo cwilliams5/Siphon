@@ -42,7 +42,7 @@
           <td style="font-size:0.8em; color:#888; max-width:250px; overflow:hidden; text-overflow:ellipsis;">
             {{ feed.url }}
           </td>
-          <td><input type="text" name="date_cutoff_{{ loop.index0 }}" placeholder="YYYYMMDD" style="width:100px;"></td>
+          <td><input type="date" name="date_cutoff_{{ loop.index0 }}" style="width:140px;"></td>
           <td>
             <select name="llm_trim_{{ loop.index0 }}">
               <option value="">Default</option>

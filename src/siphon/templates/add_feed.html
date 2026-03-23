@@ -69,7 +69,7 @@
     <div class="form-row">
       <div class="form-group">
         <label>Date Cutoff</label>
-        <input type="text" name="date_cutoff" placeholder="YYYYMMDD" value="{{ prefill.date_cutoff or '' }}">
+        <input type="date" name="date_cutoff" value="{{ prefill.date_cutoff[:4] + '-' + prefill.date_cutoff[4:6] + '-' + prefill.date_cutoff[6:] if prefill.date_cutoff and prefill.date_cutoff|length == 8 else prefill.date_cutoff or '' }}">
       </div>
       <div class="form-group">
         <label>LLM Trim</label>
