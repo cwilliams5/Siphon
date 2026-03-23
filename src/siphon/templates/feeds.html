@@ -46,9 +46,12 @@
 {% endblock %}
 
 {% block nav_extra %}
-<input type="text" id="feed-search" class="nav-search" placeholder="Search feeds..." onkeydown="if(event.key==='Escape'){this.value='';searchFeeds();}">
+<div style="position:relative; display:inline-flex; align-items:center;">
+  <i data-lucide="search" style="width:14px;height:14px; position:absolute; left:8px; color:var(--text-muted); pointer-events:none;"></i>
+  <input type="text" id="feed-search" class="nav-search" placeholder="Search feeds..." title="Search feeds by name" style="padding-left:28px;" onkeydown="if(event.key==='Escape'){this.value='';searchFeeds();}">
+</div>
 <form method="post" action="/ui/check-now" style="display:inline; margin:0;">
-  <button type="submit" class="btn btn-small">Check Feeds Now</button>
+  <button type="submit" class="btn btn-small" title="Check all feeds for new episodes"><i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Check Now</button>
 </form>
 {% endblock %}
 
@@ -233,16 +236,16 @@ testCookies();
       {% endif %}
     </div>
     <div style="display:flex; gap:8px;">
-      <button class="btn btn-secondary btn-small" onclick="copyRSS('{{ feed.name }}')" title="Copy RSS URL with auth">RSS</button>
+      <button class="btn btn-secondary btn-small" onclick="copyRSS('{{ feed.name }}')" title="Copy RSS URL with auth"><i data-lucide="link" style="width:14px;height:14px;"></i> RSS</button>
       {% if feed.pc_url %}
-      <a href="{{ feed.pc_url }}" class="btn btn-secondary btn-small" style="background:#f43e37;" target="_blank" title="Open in Pocket Casts">PC</a>
+      <a href="{{ feed.pc_url }}" class="btn btn-secondary btn-small" style="background:#f43e37;" target="_blank" title="Open in Pocket Casts"><i data-lucide="headphones" style="width:14px;height:14px;"></i> PC</a>
       {% endif %}
-      <button class="btn btn-small" onclick="toggleEdit('{{ feed.name }}')">Edit</button>
+      <button class="btn btn-small" onclick="toggleEdit('{{ feed.name }}')"><i data-lucide="settings" style="width:14px;height:14px;"></i> Edit</button>
       <form method="post" action="/ui/feed-action" style="display:inline;"
             onsubmit="return confirm('Mark {{ feed.name }} as caught up? This deletes all downloaded files and sets date_cutoff to today.')">
         <input type="hidden" name="feed_name" value="{{ feed.name }}">
         <input type="hidden" name="action" value="catchup">
-        <button type="submit" class="btn btn-danger btn-small">Mark Caught Up</button>
+        <button type="submit" class="btn btn-danger btn-small"><i data-lucide="check-circle" style="width:14px;height:14px;"></i> Caught Up</button>
       </form>
     </div>
   </div>
@@ -361,13 +364,13 @@ testCookies();
         <input type="hidden" name="feed_name" value="{{ feed.name }}">
         <input type="hidden" name="action" value="rename">
         <input type="text" name="new_name" placeholder="New name" style="width:150px;" class="btn-small">
-        <button type="submit" class="btn btn-secondary btn-small">Rename</button>
+        <button type="submit" class="btn btn-secondary btn-small"><i data-lucide="edit-3" style="width:14px;height:14px;"></i> Rename</button>
       </form>
       <form method="post" action="/ui/feed-action" style="display:inline;"
             onsubmit="return confirm('Delete feed {{ feed.name }}? This removes all episodes and files.')">
         <input type="hidden" name="feed_name" value="{{ feed.name }}">
         <input type="hidden" name="action" value="delete">
-        <button type="submit" class="btn btn-danger btn-small">Delete Feed</button>
+        <button type="submit" class="btn btn-danger btn-small"><i data-lucide="trash-2" style="width:14px;height:14px;"></i> Delete</button>
       </form>
     </div>
   </div>
@@ -449,6 +452,14 @@ function filterFeeds(type) {
 /* Search */
 function searchFeeds() {
   const q = document.getElementById('feed-search').value.toLowerCase();
+  const hasSearch = q.length > 0;
+
+  /* Hide stats and insights when searching */
+  document.querySelectorAll('details[data-persist]').forEach(d => {
+    d.style.display = hasSearch ? 'none' : '';
+  });
+
+  /* Filter feed cards */
   document.querySelectorAll('#feed-list .card').forEach(card => {
     const name = card.dataset.feedName;
     card.style.display = (!q || name.includes(q)) ? '' : 'none';
@@ -532,5 +543,8 @@ function fetchActivityLog() {
 initActivityState();
 fetchActivityLog();
 setInterval(fetchActivityLog, 5000);
+
+/* Re-render Lucide icons after dynamic content */
+if (typeof lucide !== 'undefined') lucide.createIcons();
 </script>
 {% endblock %}
