@@ -297,6 +297,7 @@ testCookies();
         {% if feed.feed_type == 'podcast' %}<span class="stat-chip">{{ feed.source_count | commafy }} source</span>{% endif %}
         {% if feed.llm_cuts_total %}<span class="stat-chip">{{ feed.llm_cuts_total | commafy }} LLM cuts</span>{% endif %}
         {% if feed.sb_cuts_total %}<span class="stat-chip">{{ feed.sb_cuts_total | commafy }} SB cuts</span>{% endif %}
+        {% if feed.crap_filtered %}<span class="stat-chip">{{ feed.crap_filtered | commafy }} filtered</span>{% endif %}
         {% if feed.disk_usage_mb %}<span class="stat-chip">{{ feed.disk_usage_display }}</span>{% endif %}
         {% if feed.latest_episode_date %}<span class="stat-chip">Latest: {{ feed.latest_episode_date }}</span>{% endif %}
       </div>

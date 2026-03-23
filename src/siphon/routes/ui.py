@@ -85,6 +85,7 @@ def _get_feed_display(request: Request) -> list[dict]:
         sb_cuts_total = 0
         llm_cuts_total = 0
         disk_bytes = 0
+        crap_filtered = 0
         source_count = len(episodes)
         latest_done_date = None
         for ep in episodes:
@@ -110,6 +111,9 @@ def _get_feed_display(request: Request) -> list[dict]:
             # Disk usage: sum file_size for non-pruned, non-filtered episodes
             if s not in ("filtered", "pruned"):
                 disk_bytes += ep.get("file_size") or 0
+            # Crap filtered: filtered by anything except date
+            if s == "filtered" and ep.get("filter_reason") not in (None, "too_old", "unknown_date"):
+                crap_filtered += 1
 
         # Compute disk usage display
         disk_usage_mb = round(disk_bytes / (1024 * 1024), 1)
@@ -179,6 +183,7 @@ def _get_feed_display(request: Request) -> list[dict]:
             "llm_cuts_total": llm_cuts_total,
             "disk_usage_mb": disk_usage_mb,
             "disk_usage_display": disk_usage_display,
+            "crap_filtered": crap_filtered,
             "source_count": source_count,
             "latest_episode_date": latest_episode_date,
         })
