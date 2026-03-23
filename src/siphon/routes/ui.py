@@ -11,10 +11,16 @@ from fastapi import APIRouter, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from fastapi.staticfiles import StaticFiles
 from siphon.config import FeedConfig, SiphonConfig, resolve_feed
 from siphon.db import Database
 
 router = APIRouter(prefix="/ui")
+
+# Serve static images (logo, icons)
+_img_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "..", "img")
+if os.path.isdir(_img_dir):
+    router.mount("/img", StaticFiles(directory=_img_dir), name="ui-img")
 
 templates = Jinja2Templates(
     directory=os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates")

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="img/hero.png" alt="Siphon" width="600">
+</p>
+
 # Siphon
 
 Self-hosted podcast pipeline that downloads YouTube channels and podcast feeds, strips ads using SponsorBlock + LLM analysis (Whisper + Claude), and serves clean RSS feeds to your podcast app over Tailscale.

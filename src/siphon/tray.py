@@ -40,6 +40,20 @@ def create_icon_image(size: int = 64, color: str = "#7c83ff") -> Image.Image:
     return img
 
 
+def _load_icon() -> Image.Image | None:
+    """Try to load the real icon from img/icon-64.png."""
+    import os
+    # Look relative to the package directory
+    pkg_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    icon_path = os.path.join(pkg_dir, "img", "icon-64.png")
+    if os.path.exists(icon_path):
+        try:
+            return Image.open(icon_path)
+        except Exception:
+            pass
+    return None
+
+
 class SiphonTray:
     """Manages the system tray icon and menu."""
 
@@ -148,7 +162,7 @@ class SiphonTray:
         """Start the tray icon. Blocks the calling thread."""
         import pystray
 
-        icon_image = create_icon_image()
+        icon_image = _load_icon() or create_icon_image()
         self._icon = pystray.Icon(
             "siphon",
             icon=icon_image,
