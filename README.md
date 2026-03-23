@@ -4,7 +4,7 @@
 
 # Siphon
 
-Self-hosted podcast pipeline that downloads YouTube channels and podcast feeds, strips ads using SponsorBlock + LLM analysis (Whisper + Claude), and serves clean RSS feeds to your podcast app over Tailscale.
+Self-hosted podcast pipeline that downloads YouTube channels and podcast feeds, filters garbage (youtube shorts, minimum length, title filter), strips ads (or any content - intros, credits, etc.) using SponsorBlock + LLM analysis (Whisper + Claude), and serves clean RSS feeds to your podcast app over Tailscale. Configurable per feed. 
 
 Built for a very specific stack: **Youtube API key, Tailscale Funnel, Pocket Casts, Claude Code (Max subscription), Firefox cookies for YouTube Premium**. It works great for that. If your setup is different, expect to adapt.
 
