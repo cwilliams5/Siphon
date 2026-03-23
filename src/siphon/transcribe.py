@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from typing import Any
 
@@ -17,6 +18,25 @@ _model_lock = threading.Lock()
 _model_config: tuple = (None, None, None, None)  # (model_size, device, compute_type, num_workers)
 
 
+def _ensure_cuda_dlls():
+    """Add pip-installed NVIDIA DLL paths to os.environ['PATH'] on Windows."""
+    import sys
+    if sys.platform != "win32":
+        return
+    try:
+        import importlib.util
+        for pkg in ("nvidia.cublas", "nvidia.cudnn"):
+            spec = importlib.util.find_spec(pkg)
+            if spec and spec.submodule_search_locations:
+                for loc in spec.submodule_search_locations:
+                    bin_dir = os.path.join(loc, "bin")
+                    if os.path.isdir(bin_dir) and bin_dir not in os.environ.get("PATH", ""):
+                        os.environ["PATH"] = bin_dir + os.pathsep + os.environ.get("PATH", "")
+                        logger.info("Added CUDA DLL path: %s", bin_dir)
+    except Exception as e:
+        logger.warning("Could not add CUDA DLL paths: %s", e)
+
+
 def _get_model(model_size: str, device: str, num_workers: int = 1):
     """Return a shared WhisperModel instance, loading only when config changes."""
     global _model, _model_config
@@ -24,6 +44,9 @@ def _get_model(model_size: str, device: str, num_workers: int = 1):
     config = (model_size, device, compute_type, num_workers)
     with _model_lock:
         if _model is None or _model_config != config:
+            if device == "cuda":
+                _ensure_cuda_dlls()
+
             from faster_whisper import WhisperModel
 
             logger.info(
