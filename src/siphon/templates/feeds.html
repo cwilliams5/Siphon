@@ -120,6 +120,11 @@
       <div class="stat-value">{{ total_sb_cuts | commafy }}</div>
       <div class="stat-label">SB Cuts</div>
     </div>
+    <div class="stat stat-lifetime" title="Episodes filtered by duration, shorts, or title rules (not date)">
+      <i data-lucide="filter" class="stat-watermark"></i>
+      <div class="stat-value">{{ crap_filtered | commafy }}</div>
+      <div class="stat-label">Crap Filtered</div>
+    </div>
     <div class="stat stat-lifetime" title="Total words transcribed by Whisper across all episodes">
       <i data-lucide="message-square" class="stat-watermark"></i>
       <div class="stat-value">{{ total_words | commafy }}</div>
@@ -134,11 +139,6 @@
       <i data-lucide="archive" class="stat-watermark"></i>
       <div class="stat-value">{{ purged_count | commafy }}</div>
       <div class="stat-label">Purged Complete</div>
-    </div>
-    <div class="stat stat-lifetime" title="Episodes filtered by duration, shorts, or title rules (not date)">
-      <i data-lucide="filter" class="stat-watermark"></i>
-      <div class="stat-value">{{ crap_filtered | commafy }}</div>
-      <div class="stat-label">Crap Filtered</div>
     </div>
   </div>
 </details>
