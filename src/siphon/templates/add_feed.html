@@ -56,7 +56,7 @@
       </div>
       <div class="form-group">
         <label>SponsorBlock Delay (min)</label>
-        <input type="number" name="sponsorblock_delay_minutes" placeholder="Default: 1440 (1 day)" value="{{ prefill.sponsorblock_delay_minutes or '' }}">
+        <input type="number" name="sponsorblock_delay_minutes" placeholder="Default: {{ defaults.sponsorblock_delay_minutes }}" value="{{ prefill.sponsorblock_delay_minutes or '' }}">
       </div>
     </div>
     <div class="form-row">
@@ -70,7 +70,7 @@
       </div>
       <div class="form-group">
         <label>Min Duration (sec)</label>
-        <input type="number" name="min_duration_seconds" placeholder="Default: 60" value="{{ prefill.min_duration_seconds or '' }}">
+        <input type="number" name="min_duration_seconds" placeholder="Default: {{ defaults.min_duration_seconds }}" value="{{ prefill.min_duration_seconds or '' }}">
       </div>
     </div>
     <div class="form-row">

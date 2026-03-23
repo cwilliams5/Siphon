@@ -571,10 +571,12 @@ def _reload_config(app) -> None:
 
 @router.get("/add", response_class=HTMLResponse)
 async def add_feed_page(request: Request):
+    config = request.app.state.config
     return templates.TemplateResponse("add_feed.html", {
         "request": request,
         "active_page": "add",
         "prefill": {},
+        "defaults": config.defaults,
         "messages": _get_messages(request),
     })
 
@@ -617,6 +619,7 @@ async def add_feed_submit(
                 "request": request,
                 "active_page": "add",
                 "prefill": {"url": url, "name": name, "type": type},
+                "defaults": config.defaults,
                 "messages": _get_messages(request),
             })
 
