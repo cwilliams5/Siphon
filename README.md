@@ -39,13 +39,9 @@ flowchart TB
     end
 
     subgraph Claude Worker
-        CLAUDE1[Claude CLI #1]
-        CLAUDE2[Claude CLI #2]
-        CLAUDE3[Claude CLI #3]
-        FFMPEG[ffmpeg Cut<br/>Stream copy concat]
-        CLAUDE1 --> FFMPEG
-        CLAUDE2 --> FFMPEG
-        CLAUDE3 --> FFMPEG
+        CLAUDE1[Claude CLI #1<br/>+ ffmpeg cut]
+        CLAUDE2[Claude CLI #2<br/>+ ffmpeg cut]
+        CLAUDE3[Claude CLI #3<br/>+ ffmpeg cut]
     end
 
     subgraph Serving
@@ -63,7 +59,9 @@ flowchart TB
     WHISPER --> CLAUDE1
     WHISPER --> CLAUDE2
     WHISPER --> CLAUDE3
-    FFMPEG --> RSS_GEN
+    CLAUDE1 --> RSS_GEN
+    CLAUDE2 --> RSS_GEN
+    CLAUDE3 --> RSS_GEN
 
     style YT_API fill:#c0392b,color:#fff
     style WHISPER fill:#2c3e50,color:#fff
