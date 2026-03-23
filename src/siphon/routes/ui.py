@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from fastapi import APIRouter, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -84,6 +84,9 @@ def _get_feed_display(request: Request) -> list[dict]:
         queued = 0
         sb_cuts_total = 0
         llm_cuts_total = 0
+        disk_bytes = 0
+        source_count = 0
+        latest_done_date = None
         for ep in episodes:
             s = ep["status"]
             status_counts[s] = status_counts.get(s, 0) + 1
@@ -92,6 +95,10 @@ def _get_feed_display(request: Request) -> list[dict]:
                     claude_pending += 1  # legacy: done but llm not processed
                 else:
                     in_rss += 1
+                # Track latest episode date among done episodes
+                ud = ep.get("upload_date")
+                if ud and (latest_done_date is None or ud > latest_done_date):
+                    latest_done_date = ud
             if s == "pending_whisper":
                 whisper_pending += 1
             if s == "pending_claude":
@@ -100,6 +107,30 @@ def _get_feed_display(request: Request) -> list[dict]:
                 queued += 1
             sb_cuts_total += ep.get("sb_cuts_applied") or 0
             llm_cuts_total += ep.get("llm_cuts_applied") or 0
+            # Disk usage: sum file_size for non-pruned, non-filtered episodes
+            if s not in ("filtered", "pruned"):
+                disk_bytes += ep.get("file_size") or 0
+            # Source count: all episodes except filtered
+            if s != "filtered":
+                source_count += 1
+
+        # Compute disk usage display
+        disk_usage_mb = round(disk_bytes / (1024 * 1024), 1)
+        if disk_usage_mb >= 1024:
+            disk_usage_display = f"{round(disk_usage_mb / 1024, 1)} GB"
+        else:
+            disk_usage_display = f"{disk_usage_mb} MB"
+
+        # Compute latest episode date as relative string
+        if latest_done_date:
+            try:
+                latest_dt = datetime.strptime(latest_done_date, "%Y%m%d")
+                days_ago = (datetime.now() - latest_dt).days
+                latest_episode_date = f"{days_ago}d ago"
+            except (ValueError, TypeError):
+                latest_episode_date = "\u2014"
+        else:
+            latest_episode_date = None
 
         feeds_display.append({
             "name": fc.name,
@@ -129,6 +160,10 @@ def _get_feed_display(request: Request) -> list[dict]:
             "queued": queued,
             "sb_cuts_total": sb_cuts_total,
             "llm_cuts_total": llm_cuts_total,
+            "disk_usage_mb": disk_usage_mb,
+            "disk_usage_display": disk_usage_display,
+            "source_count": source_count,
+            "latest_episode_date": latest_episode_date,
         })
 
     return feeds_display

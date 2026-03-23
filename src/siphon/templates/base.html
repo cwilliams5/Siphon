@@ -212,6 +212,134 @@
                   width: 180px; }
     .nav-search:focus { outline: none; border-color: var(--accent); }
 
+    /* Feed card layout */
+    .feed-card {
+      transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+      border: 1px solid transparent;
+      background: var(--bg-card);
+      background-image: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.15) 100%);
+    }
+    .feed-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+      box-shadow: 0 4px 12px rgba(124, 131, 255, 0.2);
+    }
+
+    .feed-card-layout {
+      display: flex;
+      gap: 16px;
+    }
+
+    .feed-artwork {
+      flex-shrink: 0;
+      width: 60px;
+      align-self: stretch;
+    }
+    .feed-artwork img {
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+    .feed-artwork-placeholder {
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      background: var(--bg-input);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .feed-content {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .feed-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+      gap: 8px;
+    }
+
+    .feed-title-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .feed-slug {
+      color: var(--text-secondary);
+      font-size: 0.85em;
+    }
+
+    .feed-buttons {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .feed-meta {
+      font-size: 0.8em;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .feed-meta:hover {
+      white-space: normal;
+      overflow: visible;
+    }
+
+    .feed-error {
+      color: var(--error);
+    }
+
+    /* Stat chips */
+    .feed-stats {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+
+    .stat-chip {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.8em;
+      background: var(--bg-input);
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    /* Queue indicator */
+    .feed-queue {
+      font-size: 0.85em;
+      color: var(--warning);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .queue-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--warning);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
     {% block extra_css %}{% endblock %}
   </style>
 </head>

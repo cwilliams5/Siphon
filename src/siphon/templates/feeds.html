@@ -234,51 +234,72 @@ testCookies();
 
 <div id="feed-list">
 {% for feed in feeds %}
-<div class="card" data-feed-type="{{ feed.feed_type }}" data-feed-name="{{ (feed.display_name or feed.name)|lower }}" data-llm="{{ feed.llm_trim }}" data-sb="{{ feed.sponsorblock }}" data-cuts="{{ feed.llm_cuts_total + feed.sb_cuts_total }}" data-last-checked="{{ feed.last_checked_at or '' }}">
-  <div class="card-header">
-    <div style="display:flex; align-items:center; gap:10px;">
+<div class="card feed-card" data-feed-type="{{ feed.feed_type }}" data-feed-name="{{ (feed.display_name or feed.name)|lower }}" data-llm="{{ feed.llm_trim }}" data-sb="{{ feed.sponsorblock }}" data-cuts="{{ feed.llm_cuts_total + feed.sb_cuts_total }}" data-last-checked="{{ feed.last_checked_at or '' }}">
+  <div class="feed-card-layout">
+    <!-- Left: artwork -->
+    <div class="feed-artwork">
       {% if feed.image_url %}
-      <img src="{{ feed.image_url }}" alt="" style="width:40px; height:40px; border-radius:6px; object-fit:cover;">
-      {% endif %}
-      <strong>{{ feed.display_name or feed.name }}</strong>
-      {% if feed.display_name %}
-      <span style="color:var(--text-secondary); font-size:0.85em;">({{ feed.name }})</span>
-      {% endif %}
-      <span class="badge {% if feed.feed_type == 'podcast' %}badge-pod{% else %}badge-yt{% endif %}">
-        {{ feed.feed_type }}
-      </span>
-      {% if feed.llm_trim %}
-      <span class="badge badge-llm">LLM</span>
+      <img src="{{ feed.image_url }}" alt="">
+      {% else %}
+      <div class="feed-artwork-placeholder"><i data-lucide="radio" style="width:24px;height:24px;color:var(--text-muted);"></i></div>
       {% endif %}
     </div>
-    <div style="display:flex; gap:8px;">
-      <button class="btn btn-secondary btn-small" onclick="copyRSS('{{ feed.name }}')" title="Copy RSS URL with auth"><i data-lucide="link" style="width:14px;height:14px;"></i> RSS</button>
-      {% if feed.pc_url %}
-      <a href="{{ feed.pc_url }}" class="btn btn-secondary btn-small" style="background:#f43e37;" target="_blank" title="Open in Pocket Casts"><i data-lucide="headphones" style="width:14px;height:14px;"></i> PC</a>
-      {% endif %}
-      <button class="btn btn-small" onclick="toggleEdit('{{ feed.name }}')"><i data-lucide="settings" style="width:14px;height:14px;"></i> Edit</button>
-      <form method="post" action="/ui/feed-action" style="display:inline;"
-            onsubmit="return confirm('Mark {{ feed.name }} as caught up? This deletes all downloaded files and sets date_cutoff to today.')">
-        <input type="hidden" name="feed_name" value="{{ feed.name }}">
-        <input type="hidden" name="action" value="catchup">
-        <button type="submit" class="btn btn-danger btn-small"><i data-lucide="check-circle" style="width:14px;height:14px;"></i> Caught Up</button>
-      </form>
-    </div>
-  </div>
-  <div style="font-size:0.85em; color:var(--text-secondary);">
-    {{ feed.url }}
-    {% if feed.last_checked_at %} &mdash; Last checked: {{ feed.last_checked_at }}{% endif %}
-    {% if feed.last_error %} &mdash; <span style="color:var(--error)">Error: {{ feed.last_error }}</span>{% endif %}
-  </div>
-  <div style="font-size:0.85em; color:var(--text-secondary); margin-top:4px;">
-    Stats: {{ feed.in_rss | commafy }} in RSS{% if feed.llm_cuts_total %} | {{ feed.llm_cuts_total | commafy }} LLM cuts{% endif %}{% if feed.sb_cuts_total %} | {{ feed.sb_cuts_total | commafy }} SB cuts{% endif %}
-  </div>
-  {% if feed.queued or feed.whisper_pending or feed.claude_pending %}
-  <div style="font-size:0.85em; color:var(--warning); margin-top:2px;">
-    Queue:{% if feed.queued %} {{ feed.queued }} downloading{% endif %}{% if feed.whisper_pending %}{% if feed.queued %} |{% endif %} {{ feed.whisper_pending }} whisper{% endif %}{% if feed.claude_pending %}{% if feed.queued or feed.whisper_pending %} |{% endif %} {{ feed.claude_pending }} claude{% endif %}
-  </div>
-  {% endif %}
 
+    <!-- Right: content -->
+    <div class="feed-content">
+      <!-- Row 1: Title + badges + buttons -->
+      <div class="feed-header">
+        <div class="feed-title-area">
+          <strong>{{ feed.display_name or feed.name }}</strong>
+          {% if feed.display_name %}
+          <span class="feed-slug">({{ feed.name }})</span>
+          {% endif %}
+          <span class="badge {% if feed.feed_type == 'podcast' %}badge-pod{% else %}badge-yt{% endif %}">{{ feed.feed_type }}</span>
+          {% if feed.llm_trim %}<span class="badge badge-llm">LLM</span>{% endif %}
+        </div>
+        <div class="feed-buttons">
+          <button class="btn btn-secondary btn-small" onclick="copyRSS('{{ feed.name }}')" title="Copy RSS URL with auth"><i data-lucide="link" style="width:14px;height:14px;"></i> RSS</button>
+          {% if feed.pc_url %}
+          <a href="{{ feed.pc_url }}" class="btn btn-secondary btn-small" style="background:#f43e37;" target="_blank" title="Open in Pocket Casts"><i data-lucide="headphones" style="width:14px;height:14px;"></i> PC</a>
+          {% endif %}
+          <button class="btn btn-small" onclick="toggleEdit('{{ feed.name }}')"><i data-lucide="settings" style="width:14px;height:14px;"></i> Edit</button>
+          <form method="post" action="/ui/feed-action" style="display:inline;"
+                onsubmit="return confirm('Mark {{ feed.name }} as caught up? This deletes all downloaded files and sets date_cutoff to today.')">
+            <input type="hidden" name="feed_name" value="{{ feed.name }}">
+            <input type="hidden" name="action" value="catchup">
+            <button type="submit" class="btn btn-danger btn-small"><i data-lucide="check-circle" style="width:14px;height:14px;"></i> Caught Up</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Row 2: URL + last checked -->
+      <div class="feed-meta">
+        <span class="feed-url">{{ feed.url }}</span>
+        {% if feed.last_checked_at %}<span> &mdash; Checked {{ feed.last_checked_at }}</span>{% endif %}
+        {% if feed.last_error %}<span class="feed-error"> &mdash; Error: {{ feed.last_error }}</span>{% endif %}
+      </div>
+
+      <!-- Row 3: Stats chips -->
+      <div class="feed-stats">
+        <span class="stat-chip">{{ feed.in_rss | commafy }} in RSS</span>
+        <span class="stat-chip">{{ feed.source_count | commafy }} source</span>
+        {% if feed.llm_cuts_total %}<span class="stat-chip">{{ feed.llm_cuts_total | commafy }} LLM cuts</span>{% endif %}
+        {% if feed.sb_cuts_total %}<span class="stat-chip">{{ feed.sb_cuts_total | commafy }} SB cuts</span>{% endif %}
+        {% if feed.disk_usage_mb %}<span class="stat-chip">{{ feed.disk_usage_display }}</span>{% endif %}
+        {% if feed.latest_episode_date %}<span class="stat-chip">Latest: {{ feed.latest_episode_date }}</span>{% endif %}
+      </div>
+
+      <!-- Row 4: Queue (only when active) -->
+      {% if feed.queued or feed.whisper_pending or feed.claude_pending %}
+      <div class="feed-queue">
+        <span class="queue-dot"></span>
+        Queue:{% if feed.queued %} {{ feed.queued }} downloading{% endif %}{% if feed.whisper_pending %}{% if feed.queued %} |{% endif %} {{ feed.whisper_pending }} whisper{% endif %}{% if feed.claude_pending %}{% if feed.queued or feed.whisper_pending %} |{% endif %} {{ feed.claude_pending }} claude{% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Edit panel (hidden) -->
   <div id="edit-{{ feed.name }}" class="hidden" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
     <form method="post" action="/ui/feed-action">
       <input type="hidden" name="feed_name" value="{{ feed.name }}">
