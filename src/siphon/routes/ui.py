@@ -277,6 +277,9 @@ async def feeds_page(request: Request):
     # Insights
     insights = _compute_insights(db, config)
 
+    # Sparkline data (last 30 days)
+    sparklines = _get_sparkline_data(db)
+
     # Build auth-embedded base URL for RSS links
     # https://user:pass@host/feed/name
     from urllib.parse import urlparse
@@ -298,6 +301,7 @@ async def feeds_page(request: Request):
         "avg_processing_display": avg_processing_display,
         "status": status,
         "insights": insights,
+        "sparklines": sparklines,
         "auth_base_url": auth_base_url,
         "messages": _get_messages(request),
     })
@@ -344,6 +348,36 @@ async def check_now(request: Request):
     task.add_done_callback(_get_background_tasks(request.app).discard)
 
     return RedirectResponse("/ui/", status_code=303)
+
+
+def _get_sparkline_data(db: Database) -> dict:
+    """Get daily counts for sparkline charts over the last 30 days."""
+    processed = db.conn.execute(
+        "SELECT date(updated_at) as d, COUNT(*) as cnt "
+        "FROM episodes WHERE status = 'done' "
+        "AND updated_at >= date('now', '-30 days') "
+        "GROUP BY d ORDER BY d"
+    ).fetchall()
+
+    cuts = db.conn.execute(
+        "SELECT date(updated_at) as d, COALESCE(SUM(llm_cuts_applied), 0) as cnt "
+        "FROM episodes WHERE llm_cuts_applied IS NOT NULL "
+        "AND updated_at >= date('now', '-30 days') "
+        "GROUP BY d ORDER BY d"
+    ).fetchall()
+
+    words = db.conn.execute(
+        "SELECT date(updated_at) as d, COALESCE(SUM(whisper_word_count), 0) as cnt "
+        "FROM episodes WHERE whisper_word_count IS NOT NULL "
+        "AND updated_at >= date('now', '-30 days') "
+        "GROUP BY d ORDER BY d"
+    ).fetchall()
+
+    return {
+        "processed": [{"d": r["d"], "v": r["cnt"]} for r in processed],
+        "cuts": [{"d": r["d"], "v": r["cnt"]} for r in cuts],
+        "words": [{"d": r["d"], "v": r["cnt"]} for r in words],
+    }
 
 
 def _compute_insights(db: Database, config) -> dict:
