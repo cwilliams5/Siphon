@@ -67,8 +67,10 @@ def recover_interrupted(config: SiphonConfig, db: Database) -> None:
 
 def _transcript_path(config: SiphonConfig, feed_name: str, video_id: str) -> str:
     """Return the expected transcript JSON path for an episode."""
+    import re
+    safe_id = re.sub(r'[^\w-]', '_', video_id)[:80]
     return os.path.join(
-        config.storage.download_dir, feed_name, f"{video_id}_transcript.json"
+        config.storage.download_dir, feed_name, f"{safe_id}_transcript.json"
     )
 
 
