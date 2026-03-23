@@ -102,4 +102,24 @@
     <button type="submit">Add Feed</button>
   </form>
 </div>
+
+<script>
+(function() {
+  var nameInput = document.querySelector('input[name="name"]');
+  var displayInput = document.querySelector('input[name="display_name"]');
+  var userEditedSlug = !!nameInput.value;
+
+  nameInput.addEventListener('input', function() { userEditedSlug = true; });
+
+  displayInput.addEventListener('input', function() {
+    if (userEditedSlug) return;
+    var slug = this.value.toLowerCase().trim()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+    nameInput.value = slug;
+  });
+})();
+</script>
 {% endblock %}
