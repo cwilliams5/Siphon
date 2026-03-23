@@ -243,7 +243,9 @@ Every feed can override the defaults above. Set these in `config.yaml` under eac
 | Key | Default | Description |
 |-----|---------|-------------|
 | `sponsorblock` | `true` | Enable/disable SponsorBlock segment removal (YouTube only) |
+| `sponsorblock_delay_minutes` | `4320` | Wait time after publish for SB segments to be crowdsourced |
 | `llm_trim` | `false` | Enable Whisper + Claude ad detection for this feed |
+| `quality` | `1440` | YouTube video quality (`1440`, `1080`, or `max`) |
 | `block_shorts` | `true` | Filter out YouTube Shorts (< 60s) |
 | `min_duration_seconds` | `0` | Skip episodes shorter than this |
 | `date_cutoff` | none | Ignore episodes published before this date (YYYYMMDD) |
