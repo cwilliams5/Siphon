@@ -41,6 +41,10 @@ def _get_model(model_size: str, device: str, num_workers: int = 1):
     """Return a shared WhisperModel instance, loading only when config changes."""
     global _model, _model_config
     compute_type = "float16" if device == "cuda" else "int8"
+    # CUDA doesn't support multiple workers — force to 1
+    if device == "cuda" and num_workers > 1:
+        logger.warning("CUDA does not support num_workers > 1, forcing to 1")
+        num_workers = 1
     config = (model_size, device, compute_type, num_workers)
     with _model_lock:
         if _model is None or _model_config != config:
