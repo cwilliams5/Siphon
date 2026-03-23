@@ -251,7 +251,7 @@ Every feed can override the defaults above. Set these in `config.yaml` under eac
 | `claude_prompt_extra` | none | Append additional instructions to the default Claude ad-detection prompt |
 | `claude_prompt_override` | none | Replace the default prompt entirely with a custom one |
 
-`claude_prompt_extra` is useful for feed-specific tuning — e.g. *"This podcast always has a mid-roll ad read for Squarespace around the 15-minute mark"*. `claude_prompt_override` replaces the entire prompt, giving full control over what Claude looks for.
+`claude_prompt_extra` is useful for feed-specific tuning — e.g. *"This is an interview podcast, a guest discussing their work is not an ad."*. `claude_prompt_override` replaces the entire prompt, giving full control over what Claude looks for.
 
 See `config.example.yaml` for the full schema.
 
