@@ -247,6 +247,11 @@ async def feeds_page(request: Request):
     else:
         avg_processing_display = "--:--"
 
+    words_row = db.conn.execute(
+        "SELECT COALESCE(SUM(whisper_word_count), 0) AS total_words FROM episodes"
+    ).fetchone()
+    total_words = int(words_row["total_words"])
+
     # Insights
     insights = _compute_insights(db, config)
 
@@ -265,6 +270,7 @@ async def feeds_page(request: Request):
         "total_episodes": total_episodes,
         "total_llm_cuts": total_llm_cuts,
         "total_sb_cuts": total_sb_cuts,
+        "total_words": total_words,
         "avg_processing_display": avg_processing_display,
         "status": status,
         "insights": insights,
