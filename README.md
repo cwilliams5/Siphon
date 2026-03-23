@@ -193,8 +193,13 @@ Available at `http://localhost:8585/ui/` (localhost only, no auth). Three themes
 - **Search** — instant feed search from the header
 - **Per-feed stats** — In RSS count, queue depths, SB/LLM cut totals
 - **Mark as Caught Up** — trims to 1 episode, sets date cutoff, cleans disk
+
+## System Tray
+
 - **Pause/Resume** — three-state (Running / Pending Pause / Paused) with graceful drain
-- **Whisper workers** — adjustable from system tray (1-5, for live system use vs overnight processing)
+- **Whisper workers** — adjustable (1-5, for live system use vs overnight processing)
+- **Test YouTube Login** — verify Firefox cookie status
+- **Open Config** — launch web UI
 
 ## Key config options
 
