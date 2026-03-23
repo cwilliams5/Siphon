@@ -553,15 +553,33 @@ async def process_whisper(config: SiphonConfig, db: Database) -> None:
 
 
 async def _process_whisper_inner(config: SiphonConfig, db: Database) -> None:
-    """Inner Whisper processing — runs under _whisper_lock."""
-    if check_paused():
-        return
+    """Inner Whisper processing — loops until queue empty or paused."""
+    num_workers = config.llm.whisper_workers
 
-    episodes = db.get_pending_whisper(limit=1)
-    if not episodes:
-        return
+    _attempted: set = set()
+    while True:
+        if check_paused():
+            log_activity("Paused — stopping Whisper")
+            return
 
-    ep = episodes[0]
+        episodes = db.get_pending_whisper(limit=num_workers)
+        # Filter out episodes we already attempted this cycle
+        episodes = [ep for ep in episodes if ep["video_id"] not in _attempted]
+        if not episodes:
+            return
+
+        for ep in episodes:
+            _attempted.add(ep["video_id"])
+
+        if len(episodes) > 1:
+            tasks = [asyncio.create_task(_process_one_whisper(ep, config, db)) for ep in episodes]
+            await asyncio.gather(*tasks, return_exceptions=True)
+        else:
+            await _process_one_whisper(episodes[0], config, db)
+
+
+async def _process_one_whisper(ep: dict, config: SiphonConfig, db: Database) -> None:
+    """Process a single episode through Whisper transcription."""
     video_id = ep["video_id"]
     feed_name = ep["feed_name"]
     file_path = ep.get("file_path")
@@ -608,7 +626,7 @@ async def _process_whisper_inner(config: SiphonConfig, db: Database) -> None:
             transcript = await loop.run_in_executor(
                 None, transcribe, whisper_input,
                 config.llm.whisper_model, config.llm.whisper_device,
-                config.llm.whisper_word_timestamps,
+                config.llm.whisper_word_timestamps, config.llm.whisper_workers,
             )
         finally:
             if temp_audio is not None:
@@ -687,30 +705,38 @@ async def process_claude(config: SiphonConfig, db: Database) -> None:
 
 
 async def _process_claude_inner(config: SiphonConfig, db: Database) -> None:
-    """Inner Claude processing — runs under _claude_lock."""
-    if check_paused():
-        return
-
+    """Inner Claude processing — loops until queue empty or paused."""
     concurrency = config.llm.claude_concurrency
-    episodes = db.get_pending_claude(limit=concurrency)
-    if not episodes:
-        return
 
-    sem = asyncio.Semaphore(concurrency)
-    tasks = []
+    _attempted: set = set()
+    while True:
+        if check_paused():
+            log_activity("Paused — stopping Claude")
+            return
 
-    for ep in episodes:
-        async def _do(ep=ep):
-            async with sem:
-                await _process_one_claude(ep, config, db)
-        tasks.append(asyncio.create_task(_do()))
+        episodes = db.get_pending_claude(limit=concurrency)
+        episodes = [ep for ep in episodes if ep["video_id"] not in _attempted]
+        if not episodes:
+            return
 
-    if tasks:
-        set_status(f"Claude: {len(tasks)} active...")
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for r in results:
-            if isinstance(r, Exception):
-                logger.error("Claude task failed: %s", r)
+        for ep in episodes:
+            _attempted.add(ep["video_id"])
+
+        sem = asyncio.Semaphore(concurrency)
+        tasks = []
+
+        for ep in episodes:
+            async def _do(ep=ep):
+                async with sem:
+                    await _process_one_claude(ep, config, db)
+            tasks.append(asyncio.create_task(_do()))
+
+        if tasks:
+            set_status(f"Claude: {len(tasks)} active...")
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for r in results:
+                if isinstance(r, Exception):
+                    logger.error("Claude task failed: %s", r)
 
 
 async def _process_one_claude(ep: dict, config: SiphonConfig, db: Database) -> None:

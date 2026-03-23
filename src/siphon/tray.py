@@ -113,11 +113,32 @@ class SiphonTray:
             pause_text = "Pause"
             status_text = "Running"
 
+        # Whisper workers submenu
+        def _set_workers(n):
+            def _handler(icon, item):
+                import httpx
+                try:
+                    httpx.post(f"{self.base_url}/ui/set-whisper-workers",
+                               data={"workers": str(n)}, timeout=5)
+                    if self._icon:
+                        self._icon.notify(f"Whisper workers set to {n}", "Siphon")
+                except Exception:
+                    pass
+            return _handler
+
+        workers_menu = pystray.Menu(
+            pystray.MenuItem("1 (light)", _set_workers(1)),
+            pystray.MenuItem("2 (moderate)", _set_workers(2)),
+            pystray.MenuItem("3 (heavy)", _set_workers(3)),
+            pystray.MenuItem("5 (max)", _set_workers(5)),
+        )
+
         return pystray.Menu(
             pystray.MenuItem(f"Siphon ({status_text})", None, enabled=False),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Open Config", self._on_open_ui, default=True),
             pystray.MenuItem(pause_text, self._on_pause),
+            pystray.MenuItem("Whisper Workers", workers_menu),
             pystray.MenuItem("Test YouTube Login", self._on_test_cookies),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit", self._on_quit),

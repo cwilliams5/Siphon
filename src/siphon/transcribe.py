@@ -14,22 +14,25 @@ logger = logging.getLogger(__name__)
 
 _model = None
 _model_lock = threading.Lock()
-_model_config: tuple = (None, None, None)  # (model_size, device, compute_type)
+_model_config: tuple = (None, None, None, None)  # (model_size, device, compute_type, num_workers)
 
 
-def _get_model(model_size: str, device: str):
+def _get_model(model_size: str, device: str, num_workers: int = 1):
     """Return a shared WhisperModel instance, loading only when config changes."""
     global _model, _model_config
     compute_type = "float16" if device == "cuda" else "int8"
-    config = (model_size, device, compute_type)
+    config = (model_size, device, compute_type, num_workers)
     with _model_lock:
         if _model is None or _model_config != config:
             from faster_whisper import WhisperModel
 
-            logger.info("Loading Whisper model %s on %s (singleton)", model_size, device)
+            logger.info(
+                "Loading Whisper model %s on %s (num_workers=%d)",
+                model_size, device, num_workers,
+            )
             _model = WhisperModel(
                 model_size, device=device, compute_type=compute_type,
-                cpu_threads=4, num_workers=1,
+                cpu_threads=4, num_workers=num_workers,
             )
             _model_config = config
         return _model
@@ -40,6 +43,7 @@ def transcribe(
     model_size: str = "base",
     device: str = "cpu",
     word_timestamps: bool = True,
+    num_workers: int = 1,
 ) -> dict[str, Any]:
     """Transcribe an audio file using faster-whisper.
 
@@ -57,7 +61,7 @@ def transcribe(
             "duration": 300.0,
         }
     """
-    model = _get_model(model_size, device)
+    model = _get_model(model_size, device, num_workers)
 
     logger.info("Transcribing %s (word_timestamps=%s)", audio_path, word_timestamps)
     segments_iter, info = model.transcribe(

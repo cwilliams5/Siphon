@@ -182,6 +182,16 @@ async def activity_log(request: Request):
     return JSONResponse(get_recent(50))
 
 
+@router.post("/set-whisper-workers")
+async def set_whisper_workers(request: Request, workers: int = Form(1)):
+    """Dynamically adjust whisper_workers without restart."""
+    config = request.app.state.config
+    config.llm.whisper_workers = max(1, min(workers, 10))
+    from siphon.activity import log_activity
+    log_activity(f"Whisper workers set to {config.llm.whisper_workers}")
+    return JSONResponse({"workers": config.llm.whisper_workers})
+
+
 @router.get("/activity-log", response_class=HTMLResponse)
 async def activity_log_page(request: Request):
     from siphon.activity import get_recent, get_status as get_activity_status

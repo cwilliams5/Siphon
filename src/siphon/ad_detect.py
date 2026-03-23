@@ -121,12 +121,17 @@ def detect_ads(
     logger.info("Running Claude CLI for ad detection (model=%s, effort=%s, prompt_len=%d)",
                 model, effort, len(full_prompt))
 
+    # Launch Claude CLI at below-normal priority
+    import sys
+    creationflags = 0x00004000 if sys.platform == "win32" else 0  # BELOW_NORMAL_PRIORITY_CLASS
+
     result = subprocess.run(
         cmd,
         input=full_prompt,
         capture_output=True,
         text=True,
         timeout=300,  # 5 minute timeout
+        creationflags=creationflags,
     )
 
     if result.returncode != 0:

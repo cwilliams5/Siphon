@@ -45,11 +45,13 @@ def main():
         if sys.platform == "win32":
             import ctypes
             BELOW_NORMAL_PRIORITY_CLASS = 0x00004000
-            ctypes.windll.kernel32.SetPriorityClass(
-                ctypes.windll.kernel32.GetCurrentProcess(),
-                BELOW_NORMAL_PRIORITY_CLASS,
-            )
-            logging.info("Set process to below-normal priority")
+            PROCESS_ALL_ACCESS = 0x001F0FFF
+            pid = os.getpid()
+            handle = ctypes.windll.kernel32.OpenProcess(PROCESS_ALL_ACCESS, False, pid)
+            if handle:
+                ctypes.windll.kernel32.SetPriorityClass(handle, BELOW_NORMAL_PRIORITY_CLASS)
+                ctypes.windll.kernel32.CloseHandle(handle)
+                logging.info("Set process to below-normal priority")
     except Exception:
         pass
 
