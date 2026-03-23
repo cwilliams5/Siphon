@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from collections import deque
 from zoneinfo import ZoneInfo
 
-_log: deque[dict] = deque(maxlen=200)
+_log: deque[dict] = deque(maxlen=1000)
 _lock = threading.Lock()
 
 _current_status = {"text": "Idle", "updated": ""}
@@ -43,7 +43,7 @@ def log_activity(message: str, feed: str = "", level: str = "info") -> None:
             "level": level,
         })
 
-def get_recent(limit: int = 50) -> list[dict]:
+def get_recent(limit: int = 200) -> list[dict]:
     """Get recent activity entries."""
     with _lock:
         return list(_log)[:limit]

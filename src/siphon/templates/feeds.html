@@ -1,66 +1,118 @@
 {% extends "base.html" %}
 {% block title_suffix %} - Feeds{% endblock %}
+
+{% block extra_css %}
+/* Activity footer */
+.activity-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border);
+  z-index: 100;
+  transition: height 0.3s;
+}
+.activity-collapsed { height: 120px; }
+.activity-expanded { height: 50vh; }
+.activity-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+  font-weight: bold;
+  color: var(--accent);
+}
+.activity-body {
+  overflow-y: auto;
+  height: calc(100% - 32px);
+  padding: 4px 12px;
+  font-family: monospace;
+  font-size: 0.85em;
+}
+.activity-body .log-entry { margin: 1px 0; }
+.activity-body .error { color: var(--error); }
+.activity-body .warning { color: var(--warning); }
+.activity-body .info { color: var(--text-secondary); }
+.activity-status-bar {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  font-size: 0.9em;
+  color: var(--text-secondary);
+}
+.activity-status-bar span { margin-right: 12px; white-space: nowrap; }
+{% endblock %}
+
+{% block nav_extra %}
+<input type="text" id="feed-search" class="nav-search" placeholder="Search feeds..." onkeydown="if(event.key==='Escape'){this.value='';searchFeeds();}">
+<form method="post" action="/ui/check-now" style="display:inline; margin:0;">
+  <button type="submit" class="btn btn-small">Check Feeds Now</button>
+</form>
+{% endblock %}
+
 {% block content %}
 <h1>Feeds</h1>
 
-<div style="color:#666; font-size:0.75em; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">System</div>
-<div class="status-bar" style="margin-bottom:12px;">
-  <div class="stat">
-    <div class="stat-value">{{ feeds | selectattr('feed_type', 'equalto', 'podcast') | list | length }}</div>
-    <div class="stat-label">Podcasts</div>
+<details open data-persist="stats">
+  <summary style="cursor:pointer; color:var(--text-secondary); font-size:1.1em; margin-bottom:8px;">Stats</summary>
+  <div style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">System</div>
+  <div class="status-bar" style="margin-bottom:12px;">
+    <div class="stat">
+      <div class="stat-value">{{ feeds | selectattr('feed_type', 'equalto', 'podcast') | list | length }}</div>
+      <div class="stat-label">Podcasts</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ feeds | selectattr('feed_type', 'equalto', 'youtube') | list | length }}</div>
+      <div class="stat-label">YouTube</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ disk_usage_gb }} GB</div>
+      <div class="stat-label">Disk / {{ max_disk_gb }} GB</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ status.done_count | commafy }}</div>
+      <div class="stat-label">In RSS</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ total_episodes | commafy }}</div>
+      <div class="stat-label">Source Episodes</div>
+    </div>
+    <div class="stat" id="yt-cookie-status" style="cursor:pointer;" onclick="testCookies()">
+      <div class="stat-value" id="yt-cookie-icon">?</div>
+      <div class="stat-label">YouTube Login</div>
+    </div>
   </div>
-  <div class="stat">
-    <div class="stat-value">{{ feeds | selectattr('feed_type', 'equalto', 'youtube') | list | length }}</div>
-    <div class="stat-label">YouTube</div>
-  </div>
-  <div class="stat">
-    <div class="stat-value">{{ disk_usage_gb }} GB</div>
-    <div class="stat-label">Disk / {{ max_disk_gb }} GB</div>
-  </div>
-  <div class="stat">
-    <div class="stat-value">{{ status.done_count | commafy }}</div>
-    <div class="stat-label">In RSS</div>
-  </div>
-  <div class="stat">
-    <div class="stat-value">{{ total_episodes | commafy }}</div>
-    <div class="stat-label">Source Episodes</div>
-  </div>
-  <div class="stat" id="yt-cookie-status" style="cursor:pointer;" onclick="testCookies()">
-    <div class="stat-value" id="yt-cookie-icon">?</div>
-    <div class="stat-label">YouTube Login</div>
-  </div>
-  <form method="post" action="/ui/check-now" style="display:flex; align-items:center;">
-    <button type="submit" class="btn btn-small">Check Feeds Now</button>
-  </form>
-</div>
 
-<div style="color:#666; font-size:0.75em; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Lifetime</div>
-<div class="status-bar">
-  <div class="stat">
-    <div class="stat-value">{{ total_llm_cuts | commafy }}</div>
-    <div class="stat-label">LLM Cuts</div>
+  <div style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Lifetime</div>
+  <div class="status-bar">
+    <div class="stat">
+      <div class="stat-value">{{ total_llm_cuts | commafy }}</div>
+      <div class="stat-label">LLM Cuts</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ total_sb_cuts | commafy }}</div>
+      <div class="stat-label">SB Cuts</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ total_words | commafy }}</div>
+      <div class="stat-label">Words Processed</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ avg_processing_display }}</div>
+      <div class="stat-label">Avg Process</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ purged_count | commafy }}</div>
+      <div class="stat-label">Purged Complete</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">{{ crap_filtered | commafy }}</div>
+      <div class="stat-label">Crap Filtered</div>
+    </div>
   </div>
-  <div class="stat">
-    <div class="stat-value">{{ total_sb_cuts | commafy }}</div>
-    <div class="stat-label">SB Cuts</div>
-  </div>
-  <div class="stat">
-    <div class="stat-value">{{ total_words | commafy }}</div>
-    <div class="stat-label">Words Processed</div>
-  </div>
-  <div class="stat">
-    <div class="stat-value">{{ avg_processing_display }}</div>
-    <div class="stat-label">Avg Process</div>
-  </div>
-  <div class="stat">
-    <div class="stat-value">{{ purged_count | commafy }}</div>
-    <div class="stat-label">Purged Complete</div>
-  </div>
-  <div class="stat">
-    <div class="stat-value">{{ crap_filtered | commafy }}</div>
-    <div class="stat-label">Crap Filtered</div>
-  </div>
-</div>
+</details>
 
 <script>
 async function testCookies() {
@@ -72,31 +124,31 @@ async function testCookies() {
     const data = await resp.json();
     if (data.ok && data.logged_in) {
       el.textContent = 'Logged In';
-      stat.style.borderLeft = '3px solid #27ae60';
+      stat.style.borderLeft = '3px solid var(--success)';
     } else if (data.ok) {
       el.textContent = 'No Login';
-      stat.style.borderLeft = '3px solid #f39c12';
+      stat.style.borderLeft = '3px solid var(--warning)';
     } else {
       el.textContent = 'Fail';
-      stat.style.borderLeft = '3px solid #c0392b';
+      stat.style.borderLeft = '3px solid var(--error)';
     }
     stat.title = data.message;
   } catch(e) {
     el.textContent = 'Err';
     stat.title = 'Could not reach server';
-    stat.style.borderLeft = '3px solid #c0392b';
+    stat.style.borderLeft = '3px solid var(--error)';
   }
 }
 testCookies();
 </script>
 
 {% if insights.stale or insights.disk_hogs or insights.longest_proc or insights.most_sb or insights.most_llm or insights.highest_filter %}
-<details open style="margin-bottom:16px;">
-  <summary style="cursor:pointer; color:#ccc; font-size:1.1em; margin-bottom:8px;">Insights</summary>
+<details open data-persist="insights" style="margin-bottom:16px;">
+  <summary style="cursor:pointer; color:var(--text-secondary); font-size:1.1em; margin-bottom:8px;">Insights</summary>
   <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px;">
     {% if insights.stale %}
     <div class="card" style="padding:12px;">
-      <div style="color:#aaa; font-size:0.85em; margin-bottom:6px;">Most Stale Feeds</div>
+      <div style="color:var(--text-label); font-size:0.85em; margin-bottom:6px;">Most Stale Feeds</div>
       {% for item in insights.stale %}
       <div style="font-size:0.85em;">{{ item.name }} &mdash; {{ item.days_ago }}d ago</div>
       {% endfor %}
@@ -104,7 +156,7 @@ testCookies();
     {% endif %}
     {% if insights.disk_hogs %}
     <div class="card" style="padding:12px;">
-      <div style="color:#aaa; font-size:0.85em; margin-bottom:6px;">Disk Hogs</div>
+      <div style="color:var(--text-label); font-size:0.85em; margin-bottom:6px;">Disk Hogs</div>
       {% for item in insights.disk_hogs %}
       <div style="font-size:0.85em;">{{ item.name }} &mdash; {{ item.size_display }}</div>
       {% endfor %}
@@ -112,7 +164,7 @@ testCookies();
     {% endif %}
     {% if insights.longest_proc %}
     <div class="card" style="padding:12px;">
-      <div style="color:#aaa; font-size:0.85em; margin-bottom:6px;">Longest Processing</div>
+      <div style="color:var(--text-label); font-size:0.85em; margin-bottom:6px;">Longest Processing</div>
       {% for item in insights.longest_proc %}
       <div style="font-size:0.85em;">{{ item.title }} ({{ item.feed }}) &mdash; {{ item.time_display }}</div>
       {% endfor %}
@@ -120,7 +172,7 @@ testCookies();
     {% endif %}
     {% if insights.most_sb %}
     <div class="card" style="padding:12px;">
-      <div style="color:#aaa; font-size:0.85em; margin-bottom:6px;">Most SB Cuts / Episode</div>
+      <div style="color:var(--text-label); font-size:0.85em; margin-bottom:6px;">Most SB Cuts / Episode</div>
       {% for item in insights.most_sb %}
       <div style="font-size:0.85em;">{{ item.name }} &mdash; {{ item.avg }} avg ({{ item.count }} eps)</div>
       {% endfor %}
@@ -128,7 +180,7 @@ testCookies();
     {% endif %}
     {% if insights.most_llm %}
     <div class="card" style="padding:12px;">
-      <div style="color:#aaa; font-size:0.85em; margin-bottom:6px;">Most LLM Cuts / Episode</div>
+      <div style="color:var(--text-label); font-size:0.85em; margin-bottom:6px;">Most LLM Cuts / Episode</div>
       {% for item in insights.most_llm %}
       <div style="font-size:0.85em;">{{ item.name }} &mdash; {{ item.avg }} avg ({{ item.count }} eps)</div>
       {% endfor %}
@@ -136,7 +188,7 @@ testCookies();
     {% endif %}
     {% if insights.highest_filter %}
     <div class="card" style="padding:12px;">
-      <div style="color:#aaa; font-size:0.85em; margin-bottom:6px;">Highest Filter Rate</div>
+      <div style="color:var(--text-label); font-size:0.85em; margin-bottom:6px;">Highest Filter Rate</div>
       {% for item in insights.highest_filter %}
       <div style="font-size:0.85em;">{{ item.name }} &mdash; {{ item.pct }}% ({{ item.filtered }}/{{ item.total }})</div>
       {% endfor %}
@@ -146,22 +198,24 @@ testCookies();
 </details>
 {% endif %}
 
-<div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap;">
-  <span style="color:#888; font-size:0.85em; line-height:28px;">Sort:</span>
-  <button class="btn btn-small btn-secondary" onclick="sortFeeds('name')">Name</button>
-  <button class="btn btn-small btn-secondary" onclick="sortFeeds('latest')">Latest</button>
-  <button class="btn btn-small btn-secondary" onclick="sortFeeds('cuts')">Most Cuts</button>
-  <button class="btn btn-small btn-secondary" onclick="sortFeeds('oldest')">Oldest</button>
-  <span style="color:#888; font-size:0.85em; line-height:28px; margin-left:12px;">Filter:</span>
-  <button class="btn btn-small btn-secondary" onclick="filterFeeds('all')">All</button>
-  <button class="btn btn-small btn-secondary" onclick="filterFeeds('youtube')">YouTube</button>
-  <button class="btn btn-small btn-secondary" onclick="filterFeeds('podcast')">Podcast</button>
-  <button class="btn btn-small btn-secondary" onclick="filterFeeds('llm')">LLM</button>
+<h2 style="margin-top:16px;">Feeds</h2>
+<div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+  <span style="color:var(--text-secondary); font-size:0.85em; line-height:28px;">Sort:</span>
+  <button class="btn btn-small btn-secondary sort-btn" data-sort="name" onclick="sortFeeds('name')">Name</button>
+  <button class="btn btn-small btn-secondary sort-btn" data-sort="latest" onclick="sortFeeds('latest')">Latest</button>
+  <button class="btn btn-small btn-secondary sort-btn" data-sort="cuts" onclick="sortFeeds('cuts')">Most Cuts</button>
+  <button class="btn btn-small btn-secondary sort-btn" data-sort="oldest" onclick="sortFeeds('oldest')">Oldest</button>
+  <span style="color:var(--text-secondary); font-size:0.85em; line-height:28px; margin-left:12px;">Filter:</span>
+  <button class="btn btn-small btn-secondary filter-btn" data-filter="all" onclick="filterFeeds('all')">All</button>
+  <button class="btn btn-small btn-secondary filter-btn" data-filter="youtube" onclick="filterFeeds('youtube')">YouTube</button>
+  <button class="btn btn-small btn-secondary filter-btn" data-filter="podcast" onclick="filterFeeds('podcast')">Podcast</button>
+  <button class="btn btn-small btn-secondary filter-btn" data-filter="llm" onclick="filterFeeds('llm')">LLM</button>
+  <button class="btn btn-small btn-secondary filter-btn" data-filter="sb" onclick="filterFeeds('sb')">SB</button>
 </div>
 
 <div id="feed-list">
 {% for feed in feeds %}
-<div class="card" data-feed-type="{{ feed.feed_type }}" data-feed-name="{{ (feed.display_name or feed.name)|lower }}" data-llm="{{ feed.llm_trim }}" data-cuts="{{ feed.llm_cuts_total + feed.sb_cuts_total }}" data-last-checked="{{ feed.last_checked_at or '' }}">
+<div class="card" data-feed-type="{{ feed.feed_type }}" data-feed-name="{{ (feed.display_name or feed.name)|lower }}" data-llm="{{ feed.llm_trim }}" data-sb="{{ feed.sponsorblock }}" data-cuts="{{ feed.llm_cuts_total + feed.sb_cuts_total }}" data-last-checked="{{ feed.last_checked_at or '' }}">
   <div class="card-header">
     <div style="display:flex; align-items:center; gap:10px;">
       {% if feed.image_url %}
@@ -169,7 +223,7 @@ testCookies();
       {% endif %}
       <strong>{{ feed.display_name or feed.name }}</strong>
       {% if feed.display_name %}
-      <span style="color:#888; font-size:0.85em;">({{ feed.name }})</span>
+      <span style="color:var(--text-secondary); font-size:0.85em;">({{ feed.name }})</span>
       {% endif %}
       <span class="badge {% if feed.feed_type == 'podcast' %}badge-pod{% else %}badge-yt{% endif %}">
         {{ feed.feed_type }}
@@ -192,21 +246,21 @@ testCookies();
       </form>
     </div>
   </div>
-  <div style="font-size:0.85em; color:#888;">
+  <div style="font-size:0.85em; color:var(--text-secondary);">
     {{ feed.url }}
     {% if feed.last_checked_at %} &mdash; Last checked: {{ feed.last_checked_at }}{% endif %}
-    {% if feed.last_error %} &mdash; <span style="color:#e74c3c">Error: {{ feed.last_error }}</span>{% endif %}
+    {% if feed.last_error %} &mdash; <span style="color:var(--error)">Error: {{ feed.last_error }}</span>{% endif %}
   </div>
-  <div style="font-size:0.85em; color:#888; margin-top:4px;">
+  <div style="font-size:0.85em; color:var(--text-secondary); margin-top:4px;">
     Stats: {{ feed.in_rss | commafy }} in RSS{% if feed.llm_cuts_total %} | {{ feed.llm_cuts_total | commafy }} LLM cuts{% endif %}{% if feed.sb_cuts_total %} | {{ feed.sb_cuts_total | commafy }} SB cuts{% endif %}
   </div>
   {% if feed.queued or feed.whisper_pending or feed.claude_pending %}
-  <div style="font-size:0.85em; color:#f39c12; margin-top:2px;">
+  <div style="font-size:0.85em; color:var(--warning); margin-top:2px;">
     Queue:{% if feed.queued %} {{ feed.queued }} downloading{% endif %}{% if feed.whisper_pending %}{% if feed.queued %} |{% endif %} {{ feed.whisper_pending }} whisper{% endif %}{% if feed.claude_pending %}{% if feed.queued or feed.whisper_pending %} |{% endif %} {{ feed.claude_pending }} claude{% endif %}
   </div>
   {% endif %}
 
-  <div id="edit-{{ feed.name }}" class="hidden" style="margin-top:12px; padding-top:12px; border-top:1px solid #333;">
+  <div id="edit-{{ feed.name }}" class="hidden" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
     <form method="post" action="/ui/feed-action">
       <input type="hidden" name="feed_name" value="{{ feed.name }}">
       <input type="hidden" name="action" value="update">
@@ -302,7 +356,7 @@ testCookies();
       </div>
     </form>
 
-    <div style="display:flex; gap:8px; margin-top:12px; padding-top:8px; border-top:1px solid #333;">
+    <div style="display:flex; gap:8px; margin-top:12px; padding-top:8px; border-top:1px solid var(--border);">
       <form method="post" action="/ui/feed-action" style="display:flex; gap:8px; align-items:center;">
         <input type="hidden" name="feed_name" value="{{ feed.name }}">
         <input type="hidden" name="action" value="rename">
@@ -322,13 +376,22 @@ testCookies();
 </div>
 
 {% if not feeds %}
-<div class="card" style="text-align:center; color:#888; padding:40px;">
+<div class="card" style="text-align:center; color:var(--text-secondary); padding:40px;">
   No feeds configured. <a href="/ui/add">Add one</a> or <a href="/ui/import">import OPML</a>.
 </div>
 {% endif %}
 
-<h2>Activity Log</h2>
-<iframe src="/ui/activity-log" style="width:100%; height:300px; border:1px solid #333; border-radius:8px; background:#16213e;"></iframe>
+<!-- Activity footer (replaces old iframe) -->
+<div id="activity-footer" class="activity-footer activity-collapsed">
+  <div class="activity-header" onclick="toggleActivityLog()">
+    <span id="activity-status">Loading...</span>
+    <span id="activity-toggle">&#9650; Expand</span>
+  </div>
+  <div id="activity-body" class="activity-body">
+    <div id="activity-status-bar" class="activity-status-bar"></div>
+    <div id="activity-entries"></div>
+  </div>
+</div>
 
 <script>
 function toggleEdit(name) {
@@ -344,6 +407,8 @@ function copyRSS(name) {
     setTimeout(() => btn.textContent = orig, 1500);
   });
 }
+
+/* Sort with active state + localStorage */
 function sortFeeds(by) {
   const container = document.getElementById('feed-list');
   const cards = Array.from(container.children);
@@ -355,14 +420,117 @@ function sortFeeds(by) {
     return 0;
   });
   cards.forEach(c => container.appendChild(c));
+  /* Update active sort button */
+  document.querySelectorAll('.sort-btn').forEach(btn => {
+    btn.classList.toggle('btn-filter-active', btn.dataset.sort === by);
+    btn.classList.toggle('btn-secondary', btn.dataset.sort !== by);
+  });
+  localStorage.setItem('siphon-sort', by);
 }
+
+/* Filter with active state */
+var currentFilter = 'all';
 function filterFeeds(type) {
+  currentFilter = type;
   document.querySelectorAll('#feed-list .card').forEach(card => {
     if (type === 'all') card.style.display = '';
     else if (type === 'youtube') card.style.display = card.dataset.feedType === 'youtube' ? '' : 'none';
     else if (type === 'podcast') card.style.display = card.dataset.feedType === 'podcast' ? '' : 'none';
     else if (type === 'llm') card.style.display = card.dataset.llm === 'True' ? '' : 'none';
+    else if (type === 'sb') card.style.display = card.dataset.sb === 'True' ? '' : 'none';
+  });
+  /* Update active filter button */
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.classList.toggle('btn-filter-active', btn.dataset.filter === type);
+    btn.classList.toggle('btn-secondary', btn.dataset.filter !== type);
   });
 }
+
+/* Search */
+function searchFeeds() {
+  const q = document.getElementById('feed-search').value.toLowerCase();
+  document.querySelectorAll('#feed-list .card').forEach(card => {
+    const name = card.dataset.feedName;
+    card.style.display = (!q || name.includes(q)) ? '' : 'none';
+  });
+}
+document.getElementById('feed-search').addEventListener('input', searchFeeds);
+
+/* Activity log */
+var activityExpanded = localStorage.getItem('siphon-activity-expanded') === 'true';
+
+function toggleActivityLog() {
+  activityExpanded = !activityExpanded;
+  var footer = document.getElementById('activity-footer');
+  footer.classList.toggle('activity-collapsed', !activityExpanded);
+  footer.classList.toggle('activity-expanded', activityExpanded);
+  document.getElementById('activity-toggle').innerHTML = activityExpanded ? '&#9660; Collapse' : '&#9650; Expand';
+  localStorage.setItem('siphon-activity-expanded', activityExpanded);
+}
+
+function initActivityState() {
+  var footer = document.getElementById('activity-footer');
+  if (activityExpanded) {
+    footer.classList.remove('activity-collapsed');
+    footer.classList.add('activity-expanded');
+    document.getElementById('activity-toggle').innerHTML = '&#9660; Collapse';
+  }
+}
+
+function fetchActivityLog() {
+  fetch('/ui/activity-log-data')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      /* Status line */
+      document.getElementById('activity-status').textContent = data.status || 'Idle';
+
+      /* Status bar with system info */
+      var sys = data.system || {};
+      var barHtml = '';
+      if (sys.pause_state && sys.pause_state !== 'running') {
+        barHtml += '<span style="color:var(--warning);">[' + sys.pause_state.replace('_', ' ') + ']</span>';
+      }
+      barHtml += '<span>Limits: YT ' + (sys.youtube_downloads_this_hour||0) + '/' + (sys.youtube_downloads_max||0) + '/hr';
+      barHtml += ' | Pod ' + (sys.podcast_downloads_this_hour||0) + '/' + (sys.podcast_downloads_max||0) + '/hr</span>';
+      barHtml += '<span>Queued: DL ' + (sys.dl_queue||0) + ' | Whisper ' + (sys.whisper_queue||0) + ' | Claude ' + (sys.claude_queue||0) + '</span>';
+      barHtml += '<span>Active: DL ' + (sys.active_dl||0) + ' | Whisper ' + (sys.active_whisper||0) + ' | Claude ' + (sys.active_claude||0) + '</span>';
+      document.getElementById('activity-status-bar').innerHTML = barHtml;
+
+      /* Log entries */
+      var entries = data.entries || [];
+      var maxEntries = activityExpanded ? entries.length : 5;
+      var html = '';
+      for (var i = 0; i < Math.min(entries.length, maxEntries); i++) {
+        var e = entries[i];
+        var cls = e.level || 'info';
+        var feed = e.feed ? '[' + e.feed + '] ' : '';
+        html += '<div class="log-entry ' + cls + '">' + e.time + ' ' + feed + e.message + '</div>';
+      }
+      if (!entries.length) {
+        html = '<div style="color:var(--text-muted);">No activity yet. Hit "Check Feeds Now" to start.</div>';
+      }
+      document.getElementById('activity-entries').innerHTML = html;
+    })
+    .catch(function() {});
+}
+
+/* Restore sort from localStorage */
+(function() {
+  var savedSort = localStorage.getItem('siphon-sort');
+  if (savedSort) sortFeeds(savedSort);
+  else {
+    /* Mark "Name" as default active */
+    document.querySelectorAll('.sort-btn').forEach(function(btn) {
+      btn.classList.toggle('btn-filter-active', btn.dataset.sort === 'name');
+      btn.classList.toggle('btn-secondary', btn.dataset.sort !== 'name');
+    });
+  }
+  /* Mark "All" as default active filter */
+  filterFeeds('all');
+})();
+
+initActivityState();
+fetchActivityLog();
+setInterval(fetchActivityLog, 5000);
 </script>
 {% endblock %}

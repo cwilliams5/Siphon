@@ -71,7 +71,7 @@ class TestFeedsPage:
 
     async def test_feeds_page_shows_disk_usage(self, client):
         resp = await client.get("/ui/")
-        assert "Disk Used" in resp.text
+        assert "Disk /" in resp.text
 
     async def test_feeds_page_has_check_now_button(self, client):
         resp = await client.get("/ui/")
