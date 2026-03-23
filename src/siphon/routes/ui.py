@@ -92,10 +92,7 @@ def _get_feed_display(request: Request) -> list[dict]:
             s = ep["status"]
             status_counts[s] = status_counts.get(s, 0) + 1
             if s == "done":
-                if resolved.llm_trim and ep.get("llm_trim_status") not in ("done", "skipped"):
-                    claude_pending += 1  # legacy: done but llm not processed
-                else:
-                    in_rss += 1
+                in_rss += 1
                 # Track latest episode date among done episodes
                 ud = ep.get("upload_date")
                 if ud and (latest_done_date is None or ud > latest_done_date):

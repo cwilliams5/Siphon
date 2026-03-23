@@ -457,12 +457,6 @@ async def _process_downloads_inner(config: SiphonConfig, db: Database) -> None:
 
                     log_activity(f"Downloaded {title[:50]}", feed=feed_name)
 
-                    # Decide next status based on llm_trim setting
-                    ep = db.get_episode(video_id, feed_name)
-                    if ep and ep["status"] == "done" and resolved.llm_trim:
-                        db.update_episode_status(video_id, feed_name, "pending_whisper")
-                        logger.info("Queued %s/%s for Whisper", feed_name, video_id)
-
                 except Exception as exc:
                     logger.error("Download failed for %s/%s: %s", feed_name, video_id, exc)
                     log_activity(f"Download failed: {str(exc)[:80]}", feed=feed_name, level="error")
@@ -504,12 +498,13 @@ async def _download_youtube_episode(episode, resolved, config, db) -> None:
             )
             logger.info("SponsorBlock segments for %s: %d", video_id, sb_cuts)
 
+        next_status = "pending_whisper" if resolved.llm_trim else "done"
         db.update_episode_status(
-            video_id, feed_name, "done",
+            video_id, feed_name, next_status,
             file_path=path, file_size=size, mime_type=mime,
             **({"sb_cuts_applied": sb_cuts} if sb_cuts is not None else {}),
         )
-        logger.info("Downloaded YouTube %s for feed %s", video_id, feed_name)
+        logger.info("Downloaded YouTube %s for feed %s → %s", video_id, feed_name, next_status)
     else:
         db.update_episode_status(
             video_id, feed_name, "failed",
@@ -551,8 +546,9 @@ async def _download_podcast_episode(episode, resolved, config, db) -> None:
         None, download_podcast_audio, audio_url, output_path,
     )
 
+    next_status = "pending_whisper" if resolved.llm_trim else "done"
     db.update_episode_status(
-        video_id, feed_name, "done",
+        video_id, feed_name, next_status,
         file_path=output_path,
         file_size=file_size,
         mime_type="audio/mpeg",
