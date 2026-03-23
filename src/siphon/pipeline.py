@@ -833,6 +833,7 @@ async def _process_one_claude(ep: dict, config: SiphonConfig, db: Database) -> N
             None, detect_ads,
             transcript_text, prompt, config.llm.claude_model,
             config.llm.claude_effort, words, transcript.get("segments"),
+            title, resolved.display_name or feed_name,
         )
 
         claude_duration = time.time() - t0_claude

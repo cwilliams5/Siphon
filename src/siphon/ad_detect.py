@@ -99,6 +99,8 @@ def detect_ads(
     effort: str = "medium",
     words: list | None = None,
     segments: list | None = None,
+    title: str | None = None,
+    feed_name: str | None = None,
 ) -> dict[str, Any]:
     """Invoke Claude CLI to detect ad segments in a transcript.
 
@@ -107,7 +109,15 @@ def detect_ads(
     formatted = build_transcript_for_claude(
         transcript_text, segments or [], words,
     )
-    full_prompt = f"{prompt}\n\nTRANSCRIPT:\n{formatted}"
+    context = ""
+    if feed_name or title:
+        context = "EPISODE CONTEXT:\n"
+        if feed_name:
+            context += f"Feed: {feed_name}\n"
+        if title:
+            context += f"Title: {title}\n"
+        context += "\n"
+    full_prompt = f"{prompt}\n\n{context}TRANSCRIPT:\n{formatted}"
 
     cmd = [
         "claude",
