@@ -235,7 +235,24 @@ Available at `http://localhost:8585/ui/` (localhost only, no auth). Three themes
 | `llm` | `confidence_threshold` | `0.75` | Minimum confidence to cut a detected segment |
 | `storage` | `max_disk_gb` | `1000` | Auto-prune oldest episodes when exceeded |
 
-Per-feed overrides available for most settings. See `config.example.yaml`.
+### Per-feed overrides
+
+Every feed can override the defaults above. Set these in `config.yaml` under each feed entry, or edit them in the web UI.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `sponsorblock` | `true` | Enable/disable SponsorBlock segment removal (YouTube only) |
+| `llm_trim` | `false` | Enable Whisper + Claude ad detection for this feed |
+| `block_shorts` | `true` | Filter out YouTube Shorts (< 60s) |
+| `min_duration_seconds` | `0` | Skip episodes shorter than this |
+| `date_cutoff` | none | Ignore episodes published before this date (YYYYMMDD) |
+| `title_exclude` | `[]` | Skip episodes whose title contains any of these strings |
+| `claude_prompt_extra` | none | Append additional instructions to the default Claude ad-detection prompt |
+| `claude_prompt_override` | none | Replace the default prompt entirely with a custom one |
+
+`claude_prompt_extra` is useful for feed-specific tuning — e.g. *"This podcast always has a mid-roll ad read for Squarespace around the 15-minute mark"*. `claude_prompt_override` replaces the entire prompt, giving full control over what Claude looks for.
+
+See `config.example.yaml` for the full schema.
 
 ## Metrics & observability
 
