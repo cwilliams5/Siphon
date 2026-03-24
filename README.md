@@ -2,11 +2,19 @@
   <img src="img/hero.png" alt="Siphon" width="600">
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/python-3.11+-blue?logo=python&logoColor=white" alt="Python 3.11+">
+  <img src="https://img.shields.io/badge/tests-380+-brightgreen?logo=pytest&logoColor=white" alt="Tests 380+">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
+  <img src="https://img.shields.io/badge/platform-Windows-0078D4?logo=windows&logoColor=white" alt="Windows">
+  <img src="https://img.shields.io/badge/htmx-2.0-blue?logo=htmx&logoColor=white" alt="htmx 2.0">
+</p>
+
 # Siphon
 
 Self-hosted podcast pipeline that downloads YouTube channels and podcast feeds, filters garbage (youtube shorts, minimum length, title filter), strips ads (or any content - intros, credits, etc.) using SponsorBlock + LLM analysis (Whisper + Claude), and serves clean RSS feeds to your podcast app over Tailscale. Configurable per feed.
 
-Built for a very specific stack: **Youtube API key, Tailscale Funnel, Pocket Casts, Claude Code (Max subscription), Firefox cookies for YouTube Premium**. It works great for that. If your setup is different, expect to adapt.
+Built for a very specific stack: **Windows, Tailscale Funnel, Pocket Casts, Claude Code (Max subscription), Firefox cookies for YouTube Premium, Youtube API key**. It works great for that. If your setup is different, expect to adapt.
 
 <table>
 <tr>
