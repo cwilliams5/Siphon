@@ -658,6 +658,47 @@ def _compute_insights(db: Database, config) -> dict:
             "display": display,
         })
 
+    # Error prone — top 3 feeds with most recent errors
+    error_rows = db.conn.execute(
+        "SELECT f.name, f.last_error, "
+        "  (SELECT COUNT(*) FROM episodes e WHERE e.feed_name = f.name AND e.status = 'failed') as fail_count "
+        "FROM feeds f "
+        "WHERE f.last_error IS NOT NULL AND f.last_error != '' "
+        "ORDER BY fail_count DESC, f.last_checked_at DESC "
+        "LIMIT 3"
+    ).fetchall()
+    error_prone = []
+    for row in error_rows:
+        error_prone.append({
+            "name": display_names.get(row["name"], row["name"]),
+            "error": row["last_error"][:50],
+            "fail_count": row["fail_count"],
+        })
+
+    # Queue hogs — top 3 feeds with most episodes in pipeline
+    queue_rows = db.conn.execute(
+        "SELECT feed_name, "
+        "  SUM(CASE WHEN status IN ('pending', 'eligible', 'downloading') THEN 1 ELSE 0 END) AS dl, "
+        "  SUM(CASE WHEN status = 'pending_whisper' THEN 1 ELSE 0 END) AS whisper, "
+        "  SUM(CASE WHEN status = 'pending_claude' THEN 1 ELSE 0 END) AS claude "
+        "FROM episodes "
+        "WHERE status IN ('pending', 'eligible', 'downloading', 'pending_whisper', 'pending_claude') "
+        "GROUP BY feed_name "
+        "ORDER BY (dl + whisper + claude) DESC "
+        "LIMIT 3"
+    ).fetchall()
+    queue_hogs = []
+    for row in queue_rows:
+        total = row["dl"] + row["whisper"] + row["claude"]
+        if total > 0:
+            queue_hogs.append({
+                "name": display_names.get(row["feed_name"], row["feed_name"]),
+                "total": total,
+                "dl": row["dl"],
+                "whisper": row["whisper"],
+                "claude": row["claude"],
+            })
+
     return {
         "stale": stale,
         "disk_hogs": disk_hogs,
@@ -668,6 +709,8 @@ def _compute_insights(db: Database, config) -> dict:
         "filter_breakdown": filter_breakdown,
         "most_active": most_active,
         "time_saved": time_saved,
+        "error_prone": error_prone,
+        "queue_hogs": queue_hogs,
     }
 
 

@@ -164,7 +164,7 @@ async function testCookies() {
 testCookies();
 </script>
 
-{% if insights.stale or insights.disk_hogs or insights.longest_proc or insights.most_sb or insights.most_llm or insights.highest_filter or insights.filter_breakdown or insights.most_active or insights.time_saved %}
+{% if insights.stale or insights.disk_hogs or insights.longest_proc or insights.most_sb or insights.most_llm or insights.highest_filter or insights.filter_breakdown or insights.most_active or insights.time_saved or insights.error_prone or insights.queue_hogs %}
 <h2>Insights</h2>
 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; align-items:stretch; margin-bottom:20px;">
   {% if insights.time_saved %}
@@ -236,6 +236,22 @@ testCookies();
     <div class="insight-title"><i data-lucide="timer" style="width:14px;height:14px;"></i> Longest Processing</div>
     {% for item in insights.longest_proc %}
     <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">({{ item.time_display }}) {{ item.feed }} - {{ item.title }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if insights.queue_hogs %}
+  <div class="card insight-card" style="padding:12px; border-left:3px solid var(--warning);">
+    <div class="insight-title"><i data-lucide="layers" style="width:14px;height:14px;"></i> Queue Backlog</div>
+    {% for item in insights.queue_hogs %}
+    <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.total }} (DL {{ item.dl }} | W {{ item.whisper }} | C {{ item.claude }})</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% if insights.error_prone %}
+  <div class="card insight-card" style="padding:12px; border-left:3px solid var(--error);">
+    <div class="insight-title"><i data-lucide="alert-triangle" style="width:14px;height:14px;"></i> Feed Errors</div>
+    {% for item in insights.error_prone %}
+    <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.error }}</div>
     {% endfor %}
   </div>
   {% endif %}
