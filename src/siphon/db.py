@@ -303,7 +303,7 @@ class Database:
             """SELECT e.*, f.feed_type FROM episodes e
                JOIN feeds f ON e.feed_name = f.name
                WHERE e.status = 'pending_whisper'
-               ORDER BY e.discovered_at DESC
+               ORDER BY e.discovered_at ASC
                LIMIT ?""",
             (limit,),
         ).fetchall()

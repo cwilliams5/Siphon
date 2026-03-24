@@ -38,7 +38,7 @@ Available at `http://localhost:8585/ui/` (localhost only, no auth). Three themes
 - **Feed management** — add/edit/delete feeds with all per-feed config options, type-aware forms (YouTube vs podcast)
 - **OPML import** for bulk podcast migration from Pocket Casts or other apps
 - **Live activity log** in sticky footer with queue status, worker activity, and timing
-- **Sort & filter** — by name, latest, most cuts; filter by YouTube, Podcast, LLM, SponsorBlock
+- **Sort & filter** — bidirectional sort by name, date, LLM cuts, SB cuts, size, time saved; filter by YouTube, Podcast, LLM, SponsorBlock
 - **Search** — instant feed search from the header
 - **Per-feed stats** — In RSS count, queue depths, SB/LLM cut totals
 - **Mark as Caught Up** — trims to 1 episode, sets date cutoff, cleans disk
