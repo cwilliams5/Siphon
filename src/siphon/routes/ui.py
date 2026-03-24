@@ -348,6 +348,61 @@ async def stats_page(request: Request):
     podcast_count = sum(1 for f in feeds if f["feed_type"] == "podcast")
     youtube_count = sum(1 for f in feeds if f["feed_type"] == "youtube")
 
+    # Total time saved: LLM segment durations + SB seconds + filtered episode durations
+    import json as _json
+    total_time_saved = 0.0
+
+    # LLM time saved from segment JSON
+    llm_time_rows = db.conn.execute(
+        "SELECT llm_segments_json FROM episodes "
+        "WHERE llm_cuts_applied > 0 AND llm_segments_json IS NOT NULL"
+    ).fetchall()
+    for row in llm_time_rows:
+        try:
+            data = _json.loads(row["llm_segments_json"])
+            for seg in data.get("high_confidence", data.get("segments", [])):
+                if "start" in seg and "end" in seg:
+                    total_time_saved += seg["end"] - seg["start"]
+        except (ValueError, TypeError, KeyError):
+            pass
+
+    # SB time saved
+    sb_time_row = db.conn.execute(
+        "SELECT COALESCE(SUM(sb_seconds_removed), 0) AS total FROM episodes"
+    ).fetchone()
+    total_time_saved += sb_time_row["total"] or 0
+
+    # Filtered episode durations
+    filt_time_row = db.conn.execute(
+        "SELECT COALESCE(SUM(duration), 0) AS total FROM episodes "
+        "WHERE status = 'filtered' AND duration IS NOT NULL "
+        "  AND filter_reason NOT IN ('too_old', 'unknown_date')"
+    ).fetchone()
+    total_time_saved += filt_time_row["total"] or 0
+
+    # Format as Xd Xh Xm
+    total_secs = int(total_time_saved)
+    days = total_secs // 86400
+    hours = (total_secs % 86400) // 3600
+    mins = (total_secs % 3600) // 60
+    if days > 0:
+        total_time_saved_display = f"{days}d {hours}h {mins}m"
+    elif hours > 0:
+        total_time_saved_display = f"{hours}h {mins}m"
+    else:
+        total_time_saved_display = f"{mins}m"
+
+    # Total data processed (all episodes including pruned)
+    data_row = db.conn.execute(
+        "SELECT COALESCE(SUM(file_size), 0) AS total FROM episodes WHERE file_size IS NOT NULL"
+    ).fetchone()
+    total_data_bytes = data_row["total"] or 0
+    total_data_gb = total_data_bytes / (1024 ** 3)
+    if total_data_gb >= 1000:
+        total_data_display = f"{round(total_data_gb / 1024, 1)} TB"
+    else:
+        total_data_display = f"{round(total_data_gb, 1)} GB"
+
     return templates.TemplateResponse("stats.html", {
         "request": request,
         "active_page": "stats",
@@ -364,6 +419,8 @@ async def stats_page(request: Request):
         "avg_processing_display": avg_processing_display,
         "status": status,
         "insights": insights,
+        "total_time_saved_display": total_time_saved_display,
+        "total_data_display": total_data_display,
         "messages": _get_messages(request),
     })
 
@@ -658,6 +715,26 @@ def _compute_insights(db: Database, config) -> dict:
             "display": display,
         })
 
+    # Most data — top 3 feeds by lifetime data processed (including pruned)
+    most_data_rows = db.conn.execute(
+        "SELECT feed_name, SUM(file_size) as total_bytes "
+        "FROM episodes WHERE file_size IS NOT NULL "
+        "GROUP BY feed_name "
+        "ORDER BY total_bytes DESC "
+        "LIMIT 3"
+    ).fetchall()
+    most_data = []
+    for row in most_data_rows:
+        total_gb = row["total_bytes"] / (1024 ** 3)
+        if total_gb >= 1:
+            size_display = f"{round(total_gb, 1)} GB"
+        else:
+            size_display = f"{round(total_gb * 1024, 1)} MB"
+        most_data.append({
+            "name": display_names.get(row["feed_name"], row["feed_name"]),
+            "size_display": size_display,
+        })
+
     # Error prone — top 3 feeds with most recent errors
     error_rows = db.conn.execute(
         "SELECT f.name, f.last_error, "
@@ -709,6 +786,7 @@ def _compute_insights(db: Database, config) -> dict:
         "filter_breakdown": filter_breakdown,
         "most_active": most_active,
         "time_saved": time_saved,
+        "most_data": most_data,
         "error_prone": error_prone,
         "queue_hogs": queue_hogs,
     }
