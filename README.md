@@ -205,11 +205,12 @@ flowchart TB
 
     subgraph Serving
         RSS_GEN[RSS Feed Generator<br/>iTunes namespace<br/>Episodes hidden until LLM done]
-        FUNNEL[Tailscale Funnel<br/>HTTPS + Basic Auth<br/>RSS only]
-        TAILNET[Tailscale Network<br/>HTTP, no auth<br/>Media files only]
+        MEDIA[Media Files<br/>MP4 / MP3 on disk]
+        FUNNEL[Tailscale Funnel<br/>HTTPS + Basic Auth<br/>RSS feeds]
+        TAILNET[Tailscale Network<br/>HTTP, no auth<br/>Media streaming]
         LOCALHOST[Localhost Only<br/>No auth]
         RSS_GEN --> FUNNEL
-        RSS_GEN --> TAILNET
+        MEDIA --> TAILNET
     end
 
     subgraph Clients
@@ -228,6 +229,9 @@ flowchart TB
     CLAUDE1 --> RSS_GEN
     CLAUDE2 --> RSS_GEN
     CLAUDE3 --> RSS_GEN
+    CLAUDE1 --> MEDIA
+    CLAUDE2 --> MEDIA
+    CLAUDE3 --> MEDIA
     FUNNEL --> PC_SCRAPER
     TAILNET --> PC_APP
     LOCALHOST --> WEBUI
@@ -238,6 +242,7 @@ flowchart TB
     style CLAUDE2 fill:#8e44ad,color:#fff
     style CLAUDE3 fill:#8e44ad,color:#fff
     style SB fill:#2980b9,color:#fff
+    style MEDIA fill:#2c3e50,color:#fff
     style FUNNEL fill:#27ae60,color:#fff
     style TAILNET fill:#27ae60,color:#fff
     style LOCALHOST fill:#27ae60,color:#fff
