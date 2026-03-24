@@ -203,14 +203,21 @@ flowchart TB
         CLAUDE3[Claude CLI #3<br/>+ ffmpeg cut]
     end
 
-    subgraph Serving
-        RSS_GEN[RSS Feed Generator<br/>iTunes namespace<br/>Episodes hidden until LLM done]
+    subgraph Storage
+        DB[SQLite Database<br/>WAL mode, episode state<br/>metrics, feed metadata]
         MEDIA[Media Files<br/>MP4 / MP3 on disk]
-        FUNNEL[Tailscale Funnel<br/>HTTPS + Basic Auth<br/>RSS feeds]
-        TAILNET[Tailscale Network<br/>HTTP, no auth<br/>Media streaming]
+    end
+
+    subgraph Serving
+        RSS_SRV[RSS Generator<br/>FastAPI + Jinja2 XML<br/>iTunes namespace]
+        MEDIA_SRV[Media Server<br/>FastAPI static files]
+        WEB_SRV[Web UI Server<br/>FastAPI + Jinja2 + htmx]
+    end
+
+    subgraph Network
+        FUNNEL[Tailscale Funnel<br/>HTTPS + Basic Auth]
+        TAILNET[Tailscale Network<br/>HTTP, no auth]
         LOCALHOST[Localhost Only<br/>No auth]
-        RSS_GEN --> FUNNEL
-        MEDIA --> TAILNET
     end
 
     subgraph Clients
@@ -226,12 +233,18 @@ flowchart TB
     WHISPER --> CLAUDE1
     WHISPER --> CLAUDE2
     WHISPER --> CLAUDE3
-    CLAUDE1 --> RSS_GEN
-    CLAUDE2 --> RSS_GEN
-    CLAUDE3 --> RSS_GEN
+    CLAUDE1 --> DB
+    CLAUDE2 --> DB
+    CLAUDE3 --> DB
     CLAUDE1 --> MEDIA
     CLAUDE2 --> MEDIA
     CLAUDE3 --> MEDIA
+    DB --> RSS_SRV
+    DB --> WEB_SRV
+    MEDIA --> MEDIA_SRV
+    RSS_SRV --> FUNNEL
+    MEDIA_SRV --> TAILNET
+    WEB_SRV --> LOCALHOST
     FUNNEL --> PC_SCRAPER
     TAILNET --> PC_APP
     LOCALHOST --> WEBUI
@@ -242,7 +255,11 @@ flowchart TB
     style CLAUDE2 fill:#8e44ad,color:#fff
     style CLAUDE3 fill:#8e44ad,color:#fff
     style SB fill:#2980b9,color:#fff
+    style DB fill:#2c3e50,color:#fff
     style MEDIA fill:#2c3e50,color:#fff
+    style RSS_SRV fill:#16a085,color:#fff
+    style MEDIA_SRV fill:#16a085,color:#fff
+    style WEB_SRV fill:#16a085,color:#fff
     style FUNNEL fill:#27ae60,color:#fff
     style TAILNET fill:#27ae60,color:#fff
     style LOCALHOST fill:#27ae60,color:#fff
