@@ -6,10 +6,12 @@
 
 <div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
   <span style="color:var(--text-secondary); font-size:0.85em; line-height:28px;">Sort:</span>
-  <button class="btn btn-small btn-secondary sort-btn" data-sort="name" onclick="sortFeeds('name')">Name</button>
-  <button class="btn btn-small btn-secondary sort-btn" data-sort="latest" onclick="sortFeeds('latest')">Latest</button>
-  <button class="btn btn-small btn-secondary sort-btn" data-sort="cuts" onclick="sortFeeds('cuts')">Most Cuts</button>
-  <button class="btn btn-small btn-secondary sort-btn" data-sort="oldest" onclick="sortFeeds('oldest')">Oldest</button>
+  <button class="btn btn-small btn-secondary sort-btn" data-sort="name" onclick="toggleSort('name')">Name</button>
+  <button class="btn btn-small btn-secondary sort-btn" data-sort="date" onclick="toggleSort('date')">Date</button>
+  <button class="btn btn-small btn-secondary sort-btn" data-sort="llm-cuts" onclick="toggleSort('llm-cuts')">LLM Cuts</button>
+  <button class="btn btn-small btn-secondary sort-btn" data-sort="sb-cuts" onclick="toggleSort('sb-cuts')">SB Cuts</button>
+  <button class="btn btn-small btn-secondary sort-btn" data-sort="size" onclick="toggleSort('size')">Size</button>
+  <button class="btn btn-small btn-secondary sort-btn" data-sort="time-saved" onclick="toggleSort('time-saved')">Time Saved</button>
   <span style="color:var(--text-secondary); font-size:0.85em; line-height:28px; margin-left:12px;">Filter:</span>
   <button class="btn btn-small btn-secondary filter-btn" data-filter="all" onclick="filterFeeds('all')">All</button>
   <button class="btn btn-small btn-secondary filter-btn" data-filter="youtube" onclick="filterFeeds('youtube')">YouTube</button>
@@ -20,7 +22,7 @@
 
 <div id="feed-list">
 {% for feed in feeds %}
-<div class="card feed-card" style="animation-delay:{{ loop.index0 * 30 }}ms;" data-feed-type="{{ feed.feed_type }}" data-feed-name="{{ (feed.display_name or feed.name)|lower }}" data-llm="{{ feed.llm_trim }}" data-sb="{{ feed.sponsorblock }}" data-cuts="{{ feed.llm_cuts_total + feed.sb_cuts_total }}" data-latest="{{ feed.latest_episode_raw }}">
+<div class="card feed-card" style="animation-delay:{{ loop.index0 * 30 }}ms;" data-feed-type="{{ feed.feed_type }}" data-feed-name="{{ (feed.display_name or feed.name)|lower }}" data-llm="{{ feed.llm_trim }}" data-sb="{{ 'True' if feed.sponsorblock and feed.feed_type == 'youtube' else 'False' }}" data-llm-cuts="{{ feed.llm_cuts_total }}" data-sb-cuts="{{ feed.sb_cuts_total }}" data-disk="{{ feed.disk_usage_mb }}" data-latest="{{ feed.latest_episode_raw }}" data-time-saved="{{ feed.time_saved_secs }}">
   <div class="feed-card-layout">
     <div class="feed-artwork">
       {% if feed.image_url %}
@@ -40,6 +42,7 @@
           {% endif %}
           <span class="badge {% if feed.feed_type == 'podcast' %}badge-pod{% else %}badge-yt{% endif %}">{{ feed.feed_type }}</span>
           {% if feed.llm_trim %}<span class="badge badge-llm">LLM</span>{% endif %}
+          {% if feed.sponsorblock and feed.feed_type == 'youtube' %}<span class="badge" style="background:var(--badge-pod);color:#fff;">SB</span>{% endif %}
         </div>
         <div class="feed-buttons">
           <button class="btn btn-secondary btn-small" onclick="copyRSS('{{ feed.name }}')" title="Copy RSS URL with auth"><i data-lucide="link" style="width:14px;height:14px;"></i> RSS</button>
@@ -67,6 +70,7 @@
         {% if feed.sb_cuts_total %}<span class="stat-chip">{{ feed.sb_cuts_total | commafy }} SB cuts</span>{% endif %}
         {% if feed.crap_filtered %}<span class="stat-chip">{{ feed.crap_filtered | commafy }} filtered</span>{% endif %}
         {% if feed.disk_usage_mb %}<span class="stat-chip">{{ feed.disk_usage_display }}</span>{% endif %}
+        {% if feed.time_saved_display %}<span class="stat-chip">{{ feed.time_saved_display }}</span>{% endif %}
         {% if feed.latest_episode_date %}<span class="stat-chip">Latest: {{ feed.latest_episode_date }}</span>{% endif %}
       </div>
       {% if feed.queued or feed.whisper_pending or feed.claude_pending %}
@@ -214,22 +218,47 @@ function copyRSS(name) {
   });
 }
 
-function sortFeeds(by) {
+var currentSort = null;
+var sortAsc = false;
+
+function toggleSort(by) {
+  if (currentSort === by) {
+    sortAsc = !sortAsc;
+  } else {
+    currentSort = by;
+    sortAsc = (by === 'name'); /* name defaults ascending, everything else descending */
+  }
+  applySort();
+  localStorage.setItem('siphon-sort', by);
+  localStorage.setItem('siphon-sort-asc', sortAsc ? '1' : '0');
+}
+
+function applySort() {
+  var by = currentSort;
+  if (!by) return;
+  var dir = sortAsc ? 1 : -1;
   var container = document.getElementById('feed-list');
   var cards = Array.from(container.children);
   cards.sort(function(a, b) {
-    if (by === 'name') return a.dataset.feedName.localeCompare(b.dataset.feedName);
-    if (by === 'cuts') return parseInt(b.dataset.cuts) - parseInt(a.dataset.cuts);
-    if (by === 'latest') return (b.dataset.latest || '').localeCompare(a.dataset.latest || '');
-    if (by === 'oldest') return (a.dataset.latest || '').localeCompare(b.dataset.latest || '');
-    return 0;
+    var result = 0;
+    if (by === 'name') result = a.dataset.feedName.localeCompare(b.dataset.feedName);
+    else if (by === 'date') result = (a.dataset.latest || '').localeCompare(b.dataset.latest || '');
+    else if (by === 'llm-cuts') result = parseInt(a.dataset.llmCuts) - parseInt(b.dataset.llmCuts);
+    else if (by === 'sb-cuts') result = parseInt(a.dataset.sbCuts) - parseInt(b.dataset.sbCuts);
+    else if (by === 'size') result = parseFloat(a.dataset.disk) - parseFloat(b.dataset.disk);
+    else if (by === 'time-saved') result = parseInt(a.dataset.timeSaved) - parseInt(b.dataset.timeSaved);
+    return result * dir;
   });
   cards.forEach(function(c) { container.appendChild(c); });
+  /* Update button labels with direction arrows */
   document.querySelectorAll('.sort-btn').forEach(function(btn) {
-    btn.classList.toggle('btn-filter-active', btn.dataset.sort === by);
-    btn.classList.toggle('btn-secondary', btn.dataset.sort !== by);
+    var isActive = btn.dataset.sort === by;
+    btn.classList.toggle('btn-filter-active', isActive);
+    btn.classList.toggle('btn-secondary', !isActive);
+    /* Strip existing arrows */
+    var label = btn.textContent.replace(/\s*[\u25B2\u25BC]$/, '');
+    btn.textContent = isActive ? label + (sortAsc ? ' \u25B2' : ' \u25BC') : label;
   });
-  localStorage.setItem('siphon-sort', by);
 }
 
 function filterFeeds(type) {
@@ -257,12 +286,15 @@ function searchFeeds() {
 /* Init sort/filter from localStorage and URL params */
 (function() {
   var savedSort = localStorage.getItem('siphon-sort');
-  if (savedSort) sortFeeds(savedSort);
-  else {
-    document.querySelectorAll('.sort-btn').forEach(function(btn) {
-      btn.classList.toggle('btn-filter-active', btn.dataset.sort === 'name');
-      btn.classList.toggle('btn-secondary', btn.dataset.sort !== 'name');
-    });
+  var savedAsc = localStorage.getItem('siphon-sort-asc');
+  if (savedSort) {
+    currentSort = savedSort;
+    sortAsc = savedAsc === '1';
+    applySort();
+  } else {
+    currentSort = 'name';
+    sortAsc = true;
+    applySort();
   }
   var params = new URLSearchParams(window.location.search);
   var filterParam = params.get('filter');

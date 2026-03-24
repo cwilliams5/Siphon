@@ -109,6 +109,7 @@ def _get_feed_display(request: Request) -> list[dict]:
         llm_cuts_total = 0
         disk_bytes = 0
         crap_filtered = 0
+        time_saved_secs = 0.0
         source_count = len(episodes)
         latest_done_date = None
         for ep in episodes:
@@ -134,6 +135,22 @@ def _get_feed_display(request: Request) -> list[dict]:
             # Crap filtered: filtered by anything except date
             if s == "filtered" and ep.get("filter_reason") not in (None, "too_old", "unknown_date"):
                 crap_filtered += 1
+                # Filtered episode duration counts as time saved
+                if ep.get("duration"):
+                    time_saved_secs += ep["duration"]
+            # SB seconds removed
+            time_saved_secs += ep.get("sb_seconds_removed") or 0
+            # LLM cuts time saved
+            llm_json = ep.get("llm_segments_json")
+            if llm_json and ep.get("llm_cuts_applied", 0) > 0:
+                try:
+                    import json as _json
+                    data = _json.loads(llm_json)
+                    for seg in data.get("high_confidence", data.get("segments", [])):
+                        if "start" in seg and "end" in seg:
+                            time_saved_secs += seg["end"] - seg["start"]
+                except (ValueError, TypeError, KeyError):
+                    pass
 
         # Compute disk usage display
         disk_usage_mb = round(disk_bytes / (1024 * 1024), 1)
@@ -172,6 +189,19 @@ def _get_feed_display(request: Request) -> list[dict]:
             except (ValueError, TypeError):
                 checked_relative = last_checked_raw
 
+        # Compute time saved display
+        ts = int(time_saved_secs)
+        if ts >= 86400:
+            time_saved_display = f"{ts // 86400}d saved"
+        elif ts >= 3600:
+            time_saved_display = f"{ts // 3600}h saved"
+        elif ts >= 60:
+            time_saved_display = f"{ts // 60}m saved"
+        elif ts > 0:
+            time_saved_display = f"{ts}s saved"
+        else:
+            time_saved_display = None
+
         feeds_display.append({
             "name": fc.name,
             "url": fc.url,
@@ -207,6 +237,8 @@ def _get_feed_display(request: Request) -> list[dict]:
             "source_count": source_count,
             "latest_episode_date": latest_episode_date,
             "latest_episode_raw": latest_done_date or "",
+            "time_saved_secs": int(time_saved_secs),
+            "time_saved_display": time_saved_display,
         })
 
     return feeds_display
