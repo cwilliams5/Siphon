@@ -74,6 +74,36 @@ def _transcript_path(config: SiphonConfig, feed_name: str, video_id: str) -> str
     )
 
 
+async def _get_file_duration(loop, path: str) -> int | None:
+    """Get duration of a media file via ffprobe. Returns seconds or None."""
+    try:
+        from siphon.cutter import get_duration
+        secs = await loop.run_in_executor(None, get_duration, path)
+        return int(secs)
+    except Exception as exc:
+        logger.warning("ffprobe failed for %s: %s", path, exc)
+        return None
+
+
+def _post_download_filter(duration: int | None, resolved) -> str | None:
+    """Check if a downloaded episode should be filtered by duration."""
+    if duration is None:
+        return None
+    if resolved.block_shorts and duration < 60:
+        return "short"
+    if duration < resolved.min_duration_seconds:
+        return "too_short"
+    return None
+
+
+def _delete_file(path: str) -> None:
+    """Delete a file, ignoring errors."""
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
 # ---------------------------------------------------------------------- #
 # Feed checking
 # ---------------------------------------------------------------------- #
@@ -489,6 +519,18 @@ async def _download_youtube_episode(episode, resolved, config, db) -> None:
         path, size = result
         mime = "audio/mpeg" if resolved.mode == "audio" else "video/mp4"
 
+        # Get actual duration via ffprobe
+        duration = await _get_file_duration(loop, path)
+
+        # Post-download filter: check duration now that we know it
+        filter_reason = _post_download_filter(duration, resolved)
+        if filter_reason:
+            logger.info("Post-download filtered %s/%s: %s (duration=%s)", feed_name, video_id, filter_reason, duration)
+            log_activity(f"Filtered after download: {episode.get('title', video_id)[:50]} ({filter_reason})", feed=feed_name)
+            _delete_file(path)
+            db.update_episode_status(video_id, feed_name, "filtered", filter_reason=filter_reason, duration=duration)
+            return
+
         # Query SponsorBlock for segment count if enabled
         sb_cuts: int | None = None
         if resolved.sponsorblock:
@@ -501,7 +543,7 @@ async def _download_youtube_episode(episode, resolved, config, db) -> None:
         next_status = "pending_whisper" if resolved.llm_trim else "done"
         db.update_episode_status(
             video_id, feed_name, next_status,
-            file_path=path, file_size=size, mime_type=mime,
+            file_path=path, file_size=size, mime_type=mime, duration=duration,
             **({"sb_cuts_applied": sb_cuts} if sb_cuts is not None else {}),
         )
         logger.info("Downloaded YouTube %s for feed %s → %s", video_id, feed_name, next_status)
@@ -546,12 +588,26 @@ async def _download_podcast_episode(episode, resolved, config, db) -> None:
         None, download_podcast_audio, audio_url, output_path,
     )
 
+    # Get actual duration via ffprobe
+    loop = asyncio.get_event_loop()
+    duration = await _get_file_duration(loop, output_path)
+
+    # Post-download filter: check duration
+    filter_reason = _post_download_filter(duration, resolved)
+    if filter_reason:
+        logger.info("Post-download filtered %s/%s: %s (duration=%s)", feed_name, video_id, filter_reason, duration)
+        log_activity(f"Filtered after download: {episode.get('title', video_id)[:50]} ({filter_reason})", feed=feed_name)
+        _delete_file(output_path)
+        db.update_episode_status(video_id, feed_name, "filtered", filter_reason=filter_reason, duration=duration)
+        return
+
     next_status = "pending_whisper" if resolved.llm_trim else "done"
     db.update_episode_status(
         video_id, feed_name, next_status,
         file_path=output_path,
         file_size=file_size,
         mime_type="audio/mpeg",
+        duration=duration,
     )
     logger.info("Downloaded podcast %s for feed %s", video_id, feed_name)
 

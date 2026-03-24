@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 CHANNELS_URL = "https://www.googleapis.com/youtube/v3/channels"
 PLAYLIST_ITEMS_URL = "https://www.googleapis.com/youtube/v3/playlistItems"
+VIDEOS_URL = "https://www.googleapis.com/youtube/v3/videos"
 
 # Cooldown state — shared across all API calls
 _cooldown_until: datetime | None = None
@@ -202,6 +203,49 @@ def list_videos(
         if not page_token:
             break
 
+    # Fetch durations via videos.list (1 unit per 50 videos)
+    if videos:
+        _enrich_durations(videos, api_key, cooldown_hours)
+
     logger.info("YouTube API: %d videos from channel %s (%d pages)",
                 len(videos), channel_id, page_num + 1)
     return videos
+
+
+def _parse_iso8601_duration(s: str) -> int:
+    """Parse ISO 8601 duration (e.g. PT4M13S) to seconds."""
+    m = re.match(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", s)
+    if not m:
+        return 0
+    hours = int(m.group(1) or 0)
+    mins = int(m.group(2) or 0)
+    secs = int(m.group(3) or 0)
+    return hours * 3600 + mins * 60 + secs
+
+
+def _enrich_durations(videos: list[dict], api_key: str, cooldown_hours: int) -> None:
+    """Batch-fetch durations from videos.list and update the video dicts."""
+    video_ids = [v["id"] for v in videos]
+    durations = {}
+
+    # videos.list accepts up to 50 IDs per call
+    for i in range(0, len(video_ids), 50):
+        batch = video_ids[i:i + 50]
+        try:
+            data = _api_get(VIDEOS_URL, {
+                "key": api_key,
+                "id": ",".join(batch),
+                "part": "contentDetails",
+            }, cooldown_hours)
+            for item in data.get("items", []):
+                vid = item["id"]
+                raw = item.get("contentDetails", {}).get("duration", "")
+                durations[vid] = _parse_iso8601_duration(raw)
+        except Exception as exc:
+            logger.warning("Failed to fetch durations: %s", exc)
+            return
+
+    for v in videos:
+        d = durations.get(v["id"])
+        if d is not None:
+            v["duration"] = d
