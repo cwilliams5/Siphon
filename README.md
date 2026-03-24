@@ -8,6 +8,13 @@ Self-hosted podcast pipeline that downloads YouTube channels and podcast feeds, 
 
 Built for a very specific stack: **Youtube API key, Tailscale Funnel, Pocket Casts, Claude Code (Max subscription), Firefox cookies for YouTube Premium**. It works great for that. If your setup is different, expect to adapt.
 
+<table>
+<tr>
+<td width="50%"><a href="img/dashboard.png"><img src="img/dashboard.png" alt="Dashboard"></a></td>
+<td width="50%"><a href="img/feeds.png"><img src="img/feeds.png" alt="Feeds"></a></td>
+</tr>
+</table>
+
 ## What it does
 
 - **YouTube channels** &rarr; discovers videos via YouTube Data API v3, downloads via yt-dlp with your Firefox YouTube Premium session, applies SponsorBlock cuts, runs Whisper transcription + Claude ad detection, serves as a podcast feed
@@ -197,16 +204,7 @@ RSS feeds are served over HTTPS with Basic Auth. Media files are served over Tai
 
 Available at `http://localhost:8585/ui/` (localhost only, no auth). Three themes: Light, Dark, Black. SPA-like navigation via htmx.
 
-<p align="center">
-  <img src="img/dashboard.png" alt="Dashboard" width="800">
-</p>
-
 - **Dashboard** with system stats, lifetime metrics, and insights (most stale feeds, disk hogs, longest processing, cut stats)
-
-<p align="center">
-  <img src="img/feeds.png" alt="Feeds" width="800">
-</p>
-
 - **Feed management** — add/edit/delete feeds with all per-feed config options, type-aware forms (YouTube vs podcast)
 - **OPML import** for bulk podcast migration from Pocket Casts or other apps
 - **Live activity log** in sticky footer with queue status, worker activity, and timing
