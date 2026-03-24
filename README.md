@@ -186,18 +186,18 @@ flowchart TB
         POD_RSS[Podcast RSS Feed<br/>httpx with browser UA]
     end
 
-    subgraph Download Worker
+    subgraph Acquisition
         YT_DL[yt-dlp Download<br/>Firefox cookies / YT Premium<br/>Rate: 10/hr, 120s delay]
         SB[SponsorBlock<br/>Auto-cut known segments<br/>Stream copy, no re-encode]
         POD_DL[HTTP Download<br/>Rate: 120/hr, 2s delay<br/>10 parallel workers]
         YT_DL --> SB
     end
 
-    subgraph Whisper Worker
+    subgraph Transcription
         WHISPER[faster-whisper<br/>CUDA: 1 worker / CPU: 1-5 workers<br/>Word-level timestamps<br/>Singleton model, shared weights]
     end
 
-    subgraph Claude Worker
+    subgraph Analysis
         CLAUDE1[Claude CLI #1<br/>+ ffmpeg cut]
         CLAUDE2[Claude CLI #2<br/>+ ffmpeg cut]
         CLAUDE3[Claude CLI #3<br/>+ ffmpeg cut]
