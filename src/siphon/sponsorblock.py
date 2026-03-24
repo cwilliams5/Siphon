@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import logging
 
@@ -10,7 +12,7 @@ def get_segment_count(video_id: str, categories: list[str] | None = None) -> int
     try:
         params: dict = {"videoID": video_id}
         if categories:
-            params["categories"] = str(categories)  # JSON array format
+            params["categories"] = json.dumps(categories)
         resp = httpx.get(
             "https://sponsor.ajay.app/api/skipSegments",
             params=params,
