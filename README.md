@@ -207,8 +207,15 @@ flowchart TB
         RSS_GEN[RSS Feed Generator<br/>iTunes namespace<br/>Episodes hidden until LLM done]
         FUNNEL[Tailscale Funnel<br/>HTTPS + Basic Auth<br/>RSS only]
         TAILNET[Tailscale Network<br/>HTTP, no auth<br/>Media files only]
+        LOCALHOST[Localhost Only<br/>No auth]
         RSS_GEN --> FUNNEL
         RSS_GEN --> TAILNET
+    end
+
+    subgraph Clients
+        PC_SCRAPER[Pocket Casts<br/>Feed Scraper]
+        PC_APP[Pocket Casts<br/>App Playback]
+        WEBUI[Web UI<br/>Dashboard + Feed Management]
     end
 
     YT_API --> YT_DL
@@ -221,6 +228,9 @@ flowchart TB
     CLAUDE1 --> RSS_GEN
     CLAUDE2 --> RSS_GEN
     CLAUDE3 --> RSS_GEN
+    FUNNEL --> PC_SCRAPER
+    TAILNET --> PC_APP
+    LOCALHOST --> WEBUI
 
     style YT_API fill:#c0392b,color:#fff
     style WHISPER fill:#2c3e50,color:#fff
@@ -230,6 +240,10 @@ flowchart TB
     style SB fill:#2980b9,color:#fff
     style FUNNEL fill:#27ae60,color:#fff
     style TAILNET fill:#27ae60,color:#fff
+    style LOCALHOST fill:#27ae60,color:#fff
+    style PC_SCRAPER fill:#f39c12,color:#fff
+    style PC_APP fill:#f39c12,color:#fff
+    style WEBUI fill:#f39c12,color:#fff
 ```
 
 ### Three-queue pipeline
