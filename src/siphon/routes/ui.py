@@ -142,7 +142,7 @@ def _get_feed_display(request: Request) -> list[dict]:
             time_saved_secs += ep.get("sb_seconds_removed") or 0
             # LLM cuts time saved
             llm_json = ep.get("llm_segments_json")
-            if llm_json and ep.get("llm_cuts_applied", 0) > 0:
+            if llm_json and (ep.get("llm_cuts_applied") or 0) > 0:
                 try:
                     import json as _json
                     data = _json.loads(llm_json)
