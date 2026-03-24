@@ -108,14 +108,47 @@ def download_video(
     cookies: CookiesConfig,
     download_dir: str,
 ) -> dict:
-    """Download a single video and return its info dict."""
+    """Download a single video and return its info dict.
+
+    If SponsorBlock postprocessing fails with force_keyframes, retries
+    once with force_keyframes=False (stream copy) as a fallback.
+    """
     opts = build_download_opts(feed, cookies, download_dir)
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(video_url, download=True)
         return info  # type: ignore[return-value]
     except yt_dlp.utils.DownloadError as exc:
-        raise Exception(str(exc)) from exc
+        err = str(exc)
+        # If postprocessing failed and we had force_keyframes on, retry without it
+        if "Postprocessing" in err and feed.sponsorblock:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning("force_keyframes failed for %s, retrying with stream copy", video_url)
+            # Clean up any temp files from the failed attempt
+            import glob
+            for tmp in glob.glob(f"{download_dir}/{feed.name}/*.temp.*"):
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+            for tmp in glob.glob(f"{download_dir}/{feed.name}/*.keyframes.*"):
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+            # Rebuild opts with force_keyframes=False
+            opts_fallback = build_download_opts(feed, cookies, download_dir)
+            for pp in opts_fallback.get("postprocessors", []):
+                if pp.get("key") == "ModifyChapters":
+                    pp["force_keyframes"] = False
+            try:
+                with yt_dlp.YoutubeDL(opts_fallback) as ydl:
+                    info = ydl.extract_info(video_url, download=True)
+                return info  # type: ignore[return-value]
+            except yt_dlp.utils.DownloadError as exc2:
+                raise Exception(str(exc2)) from exc2
+        raise Exception(err) from exc
 
 
 def test_youtube_cookies(cookies: CookiesConfig) -> dict:
