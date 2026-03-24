@@ -220,7 +220,7 @@ class TestBuildDownloadOptsSponsorblock:
             if pp["key"] == "ModifyChapters"
         )
         assert mc["remove_sponsor_segments"] == ["sponsor", "selfpromo"]
-        assert mc["force_keyframes"] is False
+        assert mc["force_keyframes"] is True
 
     def test_sponsorblock_disabled(
         self, video_feed: ResolvedFeed, cookies: CookiesConfig

@@ -71,7 +71,7 @@ def build_download_opts(
             {
                 "key": "ModifyChapters",
                 "remove_sponsor_segments": feed.sponsorblock_categories,
-                "force_keyframes": False,
+                "force_keyframes": True,
             }
         )
 
