@@ -104,6 +104,11 @@
 
 <div style="color:var(--text-muted); font-size:0.75em; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Lifetime</div>
 <div class="status-bar" style="margin-bottom:12px;">
+  <div class="stat stat-lifetime" title="Total ad/filtered time removed by SponsorBlock + LLM + filters">
+    <i data-lucide="timer-off" class="stat-watermark"></i>
+    <div class="stat-value">{{ total_time_saved_display }}</div>
+    <div class="stat-label">Time Saved</div>
+  </div>
   <div class="stat stat-lifetime" title="Total ad segments removed by Claude LLM analysis">
     <i data-lucide="scissors" class="stat-watermark"></i>
     <div class="stat-value">{{ total_llm_cuts | commafy }}</div>
@@ -119,32 +124,27 @@
     <div class="stat-value">{{ crap_filtered | commafy }}</div>
     <div class="stat-label">Crap Filtered</div>
   </div>
+</div>
+<div class="status-bar" style="margin-bottom:20px;">
   <div class="stat stat-lifetime" title="Total words transcribed by Whisper across all episodes">
     <i data-lucide="message-square" class="stat-watermark"></i>
     <div class="stat-value">{{ total_words | commafy }}</div>
     <div class="stat-label">Words Processed</div>
   </div>
-</div>
-<div class="status-bar" style="margin-bottom:20px;">
   <div class="stat stat-lifetime" title="Average Whisper + Claude processing time per episode">
     <i data-lucide="clock" class="stat-watermark"></i>
     <div class="stat-value">{{ avg_processing_display }}</div>
     <div class="stat-label">Avg Process</div>
   </div>
-  <div class="stat stat-lifetime" title="Episodes downloaded and processed, then cleaned via Mark Caught Up">
-    <i data-lucide="archive" class="stat-watermark"></i>
-    <div class="stat-value">{{ purged_count | commafy }}</div>
-    <div class="stat-label">Purged Complete</div>
-  </div>
-  <div class="stat stat-lifetime" title="Total ad/filtered time removed by SponsorBlock + LLM + filters">
-    <i data-lucide="timer-off" class="stat-watermark"></i>
-    <div class="stat-value">{{ total_time_saved_display }}</div>
-    <div class="stat-label">Time Saved</div>
-  </div>
   <div class="stat stat-lifetime" title="Total data downloaded and processed across all episodes (including pruned)">
     <i data-lucide="download" class="stat-watermark"></i>
     <div class="stat-value">{{ total_data_display }}</div>
     <div class="stat-label">Total Data</div>
+  </div>
+  <div class="stat stat-lifetime" title="Episodes downloaded and processed, then cleaned via Mark Caught Up">
+    <i data-lucide="archive" class="stat-watermark"></i>
+    <div class="stat-value">{{ purged_count | commafy }}</div>
+    <div class="stat-label">Purged Complete</div>
   </div>
 </div>
 
