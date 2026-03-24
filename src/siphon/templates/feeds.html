@@ -175,27 +175,11 @@ testCookies();
 <details open data-persist="insights" style="margin-bottom:16px;">
   <summary style="cursor:pointer; color:var(--text-secondary); font-size:1.1em; margin-bottom:8px;">Insights</summary>
   <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; align-items:stretch;">
-    {% if insights.stale %}
-    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--error);">
-      <div class="insight-title"><i data-lucide="clock" style="width:14px;height:14px;"></i> Most Stale Feeds</div>
-      {% for item in insights.stale %}
-      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.days_ago }}d ago</div>
-      {% endfor %}
-    </div>
-    {% endif %}
-    {% if insights.disk_hogs %}
-    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--warning);">
-      <div class="insight-title"><i data-lucide="hard-drive" style="width:14px;height:14px;"></i> Disk Hogs</div>
-      {% for item in insights.disk_hogs %}
-      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.size_display }}</div>
-      {% endfor %}
-    </div>
-    {% endif %}
-    {% if insights.longest_proc %}
-    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--badge-llm);">
-      <div class="insight-title"><i data-lucide="timer" style="width:14px;height:14px;"></i> Longest Processing</div>
-      {% for item in insights.longest_proc %}
-      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">({{ item.time_display }}) {{ item.feed }} - {{ item.title }}</div>
+    {% if insights.time_saved %}
+    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--accent);">
+      <div class="insight-title"><i data-lucide="clock" style="width:14px;height:14px;"></i> Time Saved</div>
+      {% for item in insights.time_saved %}
+      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.display }}</div>
       {% endfor %}
     </div>
     {% endif %}
@@ -231,6 +215,14 @@ testCookies();
       {% endfor %}
     </div>
     {% endif %}
+    {% if insights.disk_hogs %}
+    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--warning);">
+      <div class="insight-title"><i data-lucide="hard-drive" style="width:14px;height:14px;"></i> Disk Hogs</div>
+      {% for item in insights.disk_hogs %}
+      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.size_display }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
     {% if insights.most_active %}
     <div class="card insight-card" style="padding:12px; border-left:3px solid var(--success);">
       <div class="insight-title"><i data-lucide="activity" style="width:14px;height:14px;"></i> Most Active (7d)</div>
@@ -239,11 +231,19 @@ testCookies();
       {% endfor %}
     </div>
     {% endif %}
-    {% if insights.time_saved %}
-    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--accent);">
-      <div class="insight-title"><i data-lucide="clock" style="width:14px;height:14px;"></i> Time Saved</div>
-      {% for item in insights.time_saved %}
-      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.display }}</div>
+    {% if insights.stale %}
+    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--error);">
+      <div class="insight-title"><i data-lucide="clock" style="width:14px;height:14px;"></i> Most Stale Feeds</div>
+      {% for item in insights.stale %}
+      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.days_ago }}d ago</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if insights.longest_proc %}
+    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--badge-llm);">
+      <div class="insight-title"><i data-lucide="timer" style="width:14px;height:14px;"></i> Longest Processing</div>
+      {% for item in insights.longest_proc %}
+      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">({{ item.time_display }}) {{ item.feed }} - {{ item.title }}</div>
       {% endfor %}
     </div>
     {% endif %}
