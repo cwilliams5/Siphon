@@ -43,6 +43,24 @@ def _format_number(value):
 templates.env.filters["commafy"] = _format_number
 
 
+def _is_htmx(request: Request) -> bool:
+    return request.headers.get("HX-Request") == "true"
+
+
+def _render(request: Request, template_name: str, context: dict):
+    """Render template — full page for normal requests, content-only for htmx."""
+    context["request"] = request
+    context["is_htmx"] = _is_htmx(request)
+    return templates.TemplateResponse(template_name, context)
+
+
+def _redirect(request: Request, url: str):
+    """Redirect — htmx-aware (uses HX-Redirect header instead of 303)."""
+    if _is_htmx(request):
+        return HTMLResponse("", headers={"HX-Redirect": url})
+    return RedirectResponse(url, status_code=303)
+
+
 def _flash(request: Request, text: str, msg_type: str = "info") -> None:
     if not hasattr(request.state, "messages"):
         request.state.messages = []
@@ -403,8 +421,7 @@ async def stats_page(request: Request):
     else:
         total_data_display = f"{round(total_data_gb, 1)} GB"
 
-    return templates.TemplateResponse("stats.html", {
-        "request": request,
+    return _render(request, "stats.html", {
         "active_page": "stats",
         "podcast_count": podcast_count,
         "youtube_count": youtube_count,
@@ -438,8 +455,7 @@ async def feeds_page(request: Request):
 
     search_query = request.query_params.get("q", "")
 
-    return templates.TemplateResponse("feeds.html", {
-        "request": request,
+    return _render(request, "feeds.html", {
         "active_page": "feeds",
         "feeds": feeds,
         "auth_base_url": auth_base_url,
@@ -488,6 +504,8 @@ async def check_now(request: Request):
     _get_background_tasks(request.app).add(task)
     task.add_done_callback(_get_background_tasks(request.app).discard)
 
+    if _is_htmx(request):
+        return HTMLResponse("", status_code=204)
     return RedirectResponse("/ui/", status_code=303)
 
 
@@ -821,8 +839,7 @@ def _reload_config(app) -> None:
 @router.get("/add", response_class=HTMLResponse)
 async def add_feed_page(request: Request):
     config = request.app.state.config
-    return templates.TemplateResponse("add_feed.html", {
-        "request": request,
+    return _render(request, "add_feed.html", {
         "active_page": "add",
         "prefill": {},
         "defaults": config.defaults,
@@ -873,8 +890,7 @@ async def add_feed_submit(
     for fc in config.feeds:
         if fc.name == name:
             _flash(request, f"Feed '{name}' already exists.", "error")
-            return templates.TemplateResponse("add_feed.html", {
-                "request": request,
+            return _render(request, "add_feed.html", {
                 "active_page": "add",
                 "prefill": {"url": url, "name": name, "type": type},
                 "defaults": config.defaults,
@@ -919,7 +935,7 @@ async def add_feed_submit(
 
     _save_config(config)
 
-    return RedirectResponse("/ui/feeds", status_code=303)
+    return _redirect(request, "/ui/feeds")
 
 
 # ------------------------------------------------------------------ #
@@ -953,23 +969,23 @@ async def feed_action(
 
     if action == "update":
         return _do_update(
-            config, feed_name, mode, quality, sponsorblock,
+            request, config, feed_name, mode, quality, sponsorblock,
             sponsorblock_categories, sponsorblock_delay_minutes,
             block_shorts, min_duration_seconds,
             llm_trim, date_cutoff, title_exclude, claude_prompt_extra,
             claude_prompt_override, display_name, pc_url,
         )
     elif action == "rename":
-        return _do_rename(config, db, feed_name, new_name)
+        return _do_rename(request, config, db, feed_name, new_name)
     elif action == "delete":
-        return _do_delete(config, db, feed_name)
+        return _do_delete(request, config, db, feed_name)
     elif action == "catchup":
-        return _do_catchup(config, db, feed_name)
+        return _do_catchup(request, config, db, feed_name)
     else:
-        return RedirectResponse("/ui/feeds", status_code=303)
+        return _redirect(request, "/ui/feeds")
 
 
-def _do_update(config, feed_name, mode, quality, sponsorblock,
+def _do_update(request, config, feed_name, mode, quality, sponsorblock,
                sponsorblock_categories, sponsorblock_delay_minutes,
                block_shorts, min_duration_seconds,
                llm_trim, date_cutoff, title_exclude, claude_prompt_extra,
@@ -1001,17 +1017,17 @@ def _do_update(config, feed_name, mode, quality, sponsorblock,
             config.feeds[i] = FeedConfig(**update)
             break
     _save_config(config)
-    return RedirectResponse("/ui/feeds", status_code=303)
+    return _redirect(request, "/ui/feeds")
 
 
-def _do_rename(config, db, feed_name, new_name):
+def _do_rename(request, config, db, feed_name, new_name):
     new_name = _slugify(new_name)
     if not new_name or new_name == feed_name:
-        return RedirectResponse("/ui/feeds", status_code=303)
+        return _redirect(request, "/ui/feeds")
 
     # Check for duplicate
     if any(fc.name == new_name for fc in config.feeds):
-        return RedirectResponse("/ui/feeds", status_code=303)
+        return _redirect(request, "/ui/feeds")
 
     # Update config
     for i, fc in enumerate(config.feeds):
@@ -1050,10 +1066,10 @@ def _do_rename(config, db, feed_name, new_name):
         pass  # Old dir didn't exist or had an invalid name — no files to move
 
     _save_config(config)
-    return RedirectResponse("/ui/feeds", status_code=303)
+    return _redirect(request, "/ui/feeds")
 
 
-def _do_delete(config, db, feed_name):
+def _do_delete(request, config, db, feed_name):
     config.feeds = [f for f in config.feeds if f.name != feed_name]
 
     download_dir = config.storage.download_dir
@@ -1072,10 +1088,10 @@ def _do_delete(config, db, feed_name):
     db.delete_episodes_by_feed(feed_name)
     db.delete_feed(feed_name)
     _save_config(config)
-    return RedirectResponse("/ui/feeds", status_code=303)
+    return _redirect(request, "/ui/feeds")
 
 
-def _do_catchup(config, db, feed_name):
+def _do_catchup(request, config, db, feed_name):
     # Find the most recent episode actually in RSS
     latest = db.conn.execute(
         """SELECT upload_date FROM episodes
@@ -1136,7 +1152,7 @@ def _do_catchup(config, db, feed_name):
         db.update_episode_status(ep["video_id"], feed_name, "pruned")
 
     _save_config(config)
-    return RedirectResponse("/ui/feeds", status_code=303)
+    return _redirect(request, "/ui/feeds")
 
 
 # ------------------------------------------------------------------ #
@@ -1145,8 +1161,7 @@ def _do_catchup(config, db, feed_name):
 
 @router.get("/import", response_class=HTMLResponse)
 async def import_page(request: Request):
-    return templates.TemplateResponse("import_opml.html", {
-        "request": request,
+    return _render(request, "import_opml.html", {
         "active_page": "import",
         "feeds_to_review": None,
         "messages": _get_messages(request),
@@ -1192,8 +1207,7 @@ async def import_upload(request: Request, opml_file: UploadFile = File(...)):
             "messages": _get_messages(request),
         })
 
-    return templates.TemplateResponse("import_opml.html", {
-        "request": request,
+    return _render(request, "import_opml.html", {
         "active_page": "import",
         "feeds_to_review": new_feeds,
         "messages": _get_messages(request),
@@ -1245,7 +1259,7 @@ async def import_confirm(request: Request):
         imported += 1
 
     _save_config(config)
-    return RedirectResponse(f"/ui/feeds?imported={imported}", status_code=303)
+    return _redirect(request, f"/ui/feeds?imported={imported}")
 
 
 # ------------------------------------------------------------------ #

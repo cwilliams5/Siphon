@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% if not is_htmx %}{% extends "base.html" %}{% endif %}
 {% block title_suffix %} - Import OPML{% endblock %}
 {% block content %}
 <h1>Import OPML</h1>

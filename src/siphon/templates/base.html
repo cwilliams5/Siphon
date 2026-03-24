@@ -110,7 +110,7 @@
            display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
            margin-bottom: 24px; }
     .nav a { padding: 6px 14px; border-radius: 6px; background: var(--nav-link-bg); color: var(--link-color);
-             display: inline-flex; align-items: center; gap: 4px; }
+             display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
     .nav a:hover, .nav a.active { background: var(--nav-link-hover); text-decoration: none; }
     .nav-spacer { flex: 1; }
     .card { background: var(--bg-card); border-radius: 8px; padding: 16px; margin-bottom: 12px;
@@ -349,18 +349,69 @@
       50% { opacity: 0.3; }
     }
 
+    /* Activity footer */
+    .activity-footer {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--bg-card); border-top: 1px solid var(--border);
+      z-index: 100; transition: height 0.3s;
+    }
+    .activity-collapsed { height: 120px; }
+    .activity-expanded { height: 50vh; }
+    .activity-header {
+      display: flex; justify-content: space-between;
+      padding: 6px 12px; cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      font-weight: bold; color: var(--accent);
+    }
+    .activity-body {
+      overflow-y: auto; height: calc(100% - 32px);
+      padding: 4px 12px; font-family: monospace; font-size: 0.85em;
+    }
+    .activity-body .log-entry { margin: 1px 0; }
+    .activity-body .error { color: var(--error); }
+    .activity-body .warning { color: var(--warning); }
+    .activity-body .info { color: var(--text-secondary); }
+    .activity-status-bar {
+      padding: 4px 0; border-bottom: 1px solid var(--border);
+      margin-bottom: 4px; font-size: 0.9em; color: var(--text-secondary);
+    }
+    .activity-status-bar span { margin-right: 12px; white-space: nowrap; }
+
+    /* Feed card entrance animation */
+    .feed-card { opacity: 0; transform: translateY(12px); animation: cardIn 0.3s ease-out forwards; }
+    @keyframes cardIn { to { opacity: 1; transform: translateY(0); } }
+
+    /* Disk progress bar */
+    .disk-bar { height: 3px; border-radius: 2px; background: var(--border); margin-top: 6px; overflow: hidden; }
+    .disk-bar-fill { height: 100%; border-radius: 2px; transition: width 1s ease-out; }
+
+    /* Stat accent stripes */
+    .stat-system { border-left: 3px solid var(--accent); }
+    .stat-lifetime { border-left: 3px solid var(--badge-llm); }
+
     {% block extra_css %}{% endblock %}
   </style>
 </head>
 <body>
   <div class="nav">
     <img src="/ui/img/header-logo.png" alt="Siphon" style="height:28px; margin-right:8px;" onerror="this.style.display='none'">
-    <a href="/ui/" class="{% if active_page == 'stats' %}active{% endif %}" title="Dashboard stats and insights"><i data-lucide="bar-chart-2" style="width:16px;height:16px;"></i> Stats</a>
-    <a href="/ui/feeds" class="{% if active_page == 'feeds' %}active{% endif %}" title="View and manage feeds"><i data-lucide="rss" style="width:16px;height:16px;"></i> Feeds</a>
-    <a href="/ui/add" class="{% if active_page == 'add' %}active{% endif %}" title="Add a new feed"><i data-lucide="plus-circle" style="width:16px;height:16px;"></i> Add Feed</a>
-    <a href="/ui/import" class="{% if active_page == 'import' %}active{% endif %}" title="Import feeds from OPML file"><i data-lucide="upload" style="width:16px;height:16px;"></i> OPML Import</a>
+    <a href="/ui/" hx-get="/ui/" hx-target="#main-content" hx-push-url="true" class="{% if active_page == 'stats' %}active{% endif %}" title="Dashboard stats and insights"><i data-lucide="bar-chart-2" style="width:16px;height:16px;"></i> Stats</a>
+    <a href="/ui/feeds" hx-get="/ui/feeds" hx-target="#main-content" hx-push-url="true" class="{% if active_page == 'feeds' %}active{% endif %}" title="View and manage feeds"><i data-lucide="rss" style="width:16px;height:16px;"></i> Feeds</a>
+    <a href="/ui/add" hx-get="/ui/add" hx-target="#main-content" hx-push-url="true" class="{% if active_page == 'add' %}active{% endif %}" title="Add a new feed"><i data-lucide="plus-circle" style="width:16px;height:16px;"></i> Add Feed</a>
+    <a href="/ui/import" hx-get="/ui/import" hx-target="#main-content" hx-push-url="true" class="{% if active_page == 'import' %}active{% endif %}" title="Import feeds from OPML file"><i data-lucide="upload" style="width:16px;height:16px;"></i> OPML Import</a>
     <div class="nav-spacer"></div>
-    {% block nav_extra %}{% endblock %}
+    <div style="position:relative; display:inline-flex; align-items:center;">
+      <i data-lucide="search" style="width:14px;height:14px; position:absolute; left:8px; color:var(--text-muted); pointer-events:none;"></i>
+      <input type="text" id="feed-search" class="nav-search" placeholder="Search feeds..." title="Search feeds by name" style="padding-left:28px;"
+             hx-get="/ui/feeds" hx-target="#main-content" hx-push-url="true"
+             hx-trigger="input changed delay:300ms, keyup[key=='Enter']"
+             hx-include="this" name="q"
+             onkeydown="if(event.key==='Escape'){this.value='';htmx.trigger(this,'input');}">
+    </div>
+    <button class="btn btn-small" title="Check all feeds for new episodes"
+            hx-post="/ui/check-now" hx-swap="none">
+      <i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Check Now
+    </button>
     <div class="theme-dropdown">
       <button class="theme-btn" onclick="toggleThemeMenu()" title="Change theme">
         <i data-lucide="palette" style="width:16px;height:16px;"></i>
@@ -372,11 +423,24 @@
       </div>
     </div>
   </div>
-  <div style="padding-top: 20px;">
+
+  <div id="main-content" style="padding-top: 20px;">
   {% for msg in messages %}
   <div class="flash flash-{{ msg.type }}">{{ msg.text }}</div>
   {% endfor %}
   {% block content %}{% endblock %}
+  </div>
+
+  <!-- Activity footer (persistent across pages) -->
+  <div id="activity-footer" class="activity-footer activity-collapsed">
+    <div class="activity-header" onclick="toggleActivityLog()">
+      <span id="activity-status">Loading...</span>
+      <span id="activity-toggle">&#9650; Expand</span>
+    </div>
+    <div id="activity-body" class="activity-body">
+      <div id="activity-status-bar" class="activity-status-bar"></div>
+      <div id="activity-entries"></div>
+    </div>
   </div>
 
   <script>
@@ -399,17 +463,109 @@
       if (saved) document.documentElement.dataset.theme = saved;
     })();
 
-    /* Collapsible sections with localStorage memory */
-    document.querySelectorAll('details[data-persist]').forEach(function(d) {
-      var key = 'siphon-' + d.dataset.persist;
-      var saved = localStorage.getItem(key);
-      if (saved === 'closed') d.removeAttribute('open');
-      else if (saved === 'open') d.setAttribute('open', '');
-      d.addEventListener('toggle', function() {
-        localStorage.setItem(key, d.open ? 'open' : 'closed');
-      });
+    /* Activity log (persistent) */
+    var activityExpanded = localStorage.getItem('siphon-activity-expanded') === 'true';
+
+    function toggleActivityLog() {
+      activityExpanded = !activityExpanded;
+      var footer = document.getElementById('activity-footer');
+      footer.classList.toggle('activity-collapsed', !activityExpanded);
+      footer.classList.toggle('activity-expanded', activityExpanded);
+      document.getElementById('activity-toggle').innerHTML = activityExpanded ? '&#9660; Collapse' : '&#9650; Expand';
+      localStorage.setItem('siphon-activity-expanded', activityExpanded);
+    }
+
+    (function() {
+      var footer = document.getElementById('activity-footer');
+      if (activityExpanded) {
+        footer.classList.remove('activity-collapsed');
+        footer.classList.add('activity-expanded');
+        document.getElementById('activity-toggle').innerHTML = '&#9660; Collapse';
+      }
+    })();
+
+    function fetchActivityLog() {
+      fetch('/ui/activity-log-data')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          document.getElementById('activity-status').textContent = data.status || 'Idle';
+          var sys = data.system || {};
+          var barHtml = '';
+          if (sys.pause_state && sys.pause_state !== 'running') {
+            barHtml += '<span style="color:var(--warning);">[' + sys.pause_state.replace('_', ' ') + ']</span>';
+          }
+          barHtml += '<span>Limits: YT ' + (sys.youtube_downloads_this_hour||0) + '/' + (sys.youtube_downloads_max||0) + '/hr';
+          barHtml += ' | Pod ' + (sys.podcast_downloads_this_hour||0) + '/' + (sys.podcast_downloads_max||0) + '/hr</span>';
+          barHtml += '<span>Queued: DL ' + (sys.dl_queue||0) + ' | Whisper ' + (sys.whisper_queue||0) + ' | Claude ' + (sys.claude_queue||0) + '</span>';
+          barHtml += '<span>Active: DL ' + (sys.active_dl||0) + ' | Whisper ' + (sys.active_whisper||0) + ' | Claude ' + (sys.active_claude||0) + '</span>';
+          document.getElementById('activity-status-bar').innerHTML = barHtml;
+          var entries = data.entries || [];
+          var maxEntries = activityExpanded ? entries.length : 5;
+          var html = '';
+          for (var i = 0; i < Math.min(entries.length, maxEntries); i++) {
+            var e = entries[i];
+            var cls = e.level || 'info';
+            var feed = e.feed ? '[' + e.feed + '] ' : '';
+            html += '<div class="log-entry ' + cls + '">' + e.time + ' ' + feed + e.message + '</div>';
+          }
+          if (!entries.length) {
+            html = '<div style="color:var(--text-muted);">No activity yet. Hit "Check Now" to start.</div>';
+          }
+          document.getElementById('activity-entries').innerHTML = html;
+        })
+        .catch(function() {});
+    }
+
+    fetchActivityLog();
+    setInterval(fetchActivityLog, 5000);
+
+    /* Update nav active state and re-init after htmx swaps */
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+      if (evt.detail.target.id === 'main-content') {
+        /* Update nav active state from URL */
+        var path = window.location.pathname;
+        document.querySelectorAll('.nav a[hx-get]').forEach(function(a) {
+          var href = a.getAttribute('hx-get');
+          a.classList.toggle('active', path === href || (href === '/ui/' && path === '/ui'));
+        });
+        /* Re-render Lucide icons */
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+        /* Re-run count-up animations */
+        if (typeof runCountUp === 'function') runCountUp();
+      }
     });
+
+    /* Count-up animation for stat values */
+    function runCountUp() {
+      document.querySelectorAll('.stat-value').forEach(function(el) {
+        if (el.dataset.counted) return;
+        var text = el.textContent.trim();
+        var match = text.match(/^([\d,]+(?:\.\d+)?)/);
+        if (!match) return;
+        var raw = match[1].replace(/,/g, '');
+        var target = parseFloat(raw);
+        if (isNaN(target) || target === 0) return;
+        el.dataset.counted = '1';
+        var suffix = text.slice(match[0].length);
+        var hasCommas = match[1].includes(',');
+        var decimals = match[1].includes('.') ? match[1].split('.')[1].length : 0;
+        var duration = 800;
+        var start = performance.now();
+        function step(now) {
+          var t = Math.min((now - start) / duration, 1);
+          t = 1 - Math.pow(1 - t, 3);
+          var val = target * t;
+          var display = decimals ? val.toFixed(decimals) : Math.round(val).toString();
+          if (hasCommas) display = parseInt(display).toLocaleString() + (decimals ? '.' + val.toFixed(decimals).split('.')[1] : '');
+          el.textContent = display + suffix;
+          if (t < 1) requestAnimationFrame(step);
+        }
+        requestAnimationFrame(step);
+      });
+    }
+    runCountUp();
   </script>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <script>lucide.createIcons();</script>
 </body>

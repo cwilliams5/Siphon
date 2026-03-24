@@ -1,10 +1,10 @@
-{% extends "base.html" %}
+{% if not is_htmx %}{% extends "base.html" %}{% endif %}
 {% block title_suffix %} - Add Feed{% endblock %}
 {% block content %}
 <h1>Add Feed</h1>
 
 <div class="card">
-  <form method="post" action="/ui/add">
+  <form hx-post="/ui/add" hx-target="#main-content">
     <div class="form-row">
       <div class="form-group" style="flex:2;">
         <label>Feed URL</label>

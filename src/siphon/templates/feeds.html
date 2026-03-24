@@ -1,63 +1,5 @@
-{% extends "base.html" %}
+{% if not is_htmx %}{% extends "base.html" %}{% endif %}
 {% block title_suffix %} - Feeds{% endblock %}
-
-{% block extra_css %}
-/* Feed card entrance animation */
-.feed-card { opacity: 0; transform: translateY(12px); animation: cardIn 0.3s ease-out forwards; }
-@keyframes cardIn { to { opacity: 1; transform: translateY(0); } }
-
-/* Activity footer */
-.activity-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: var(--bg-card);
-  border-top: 1px solid var(--border);
-  z-index: 100;
-  transition: height 0.3s;
-}
-.activity-collapsed { height: 120px; }
-.activity-expanded { height: 50vh; }
-.activity-header {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 12px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--border);
-  font-weight: bold;
-  color: var(--accent);
-}
-.activity-body {
-  overflow-y: auto;
-  height: calc(100% - 32px);
-  padding: 4px 12px;
-  font-family: monospace;
-  font-size: 0.85em;
-}
-.activity-body .log-entry { margin: 1px 0; }
-.activity-body .error { color: var(--error); }
-.activity-body .warning { color: var(--warning); }
-.activity-body .info { color: var(--text-secondary); }
-.activity-status-bar {
-  padding: 4px 0;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
-  font-size: 0.9em;
-  color: var(--text-secondary);
-}
-.activity-status-bar span { margin-right: 12px; white-space: nowrap; }
-{% endblock %}
-
-{% block nav_extra %}
-<div style="position:relative; display:inline-flex; align-items:center;">
-  <i data-lucide="search" style="width:14px;height:14px; position:absolute; left:8px; color:var(--text-muted); pointer-events:none;"></i>
-  <input type="text" id="feed-search" class="nav-search" placeholder="Search feeds..." title="Search feeds by name" style="padding-left:28px;" value="{{ search_query or '' }}" onkeydown="if(event.key==='Escape'){this.value='';searchFeeds();}">
-</div>
-<form method="post" action="/ui/check-now" style="display:inline; margin:0;">
-  <button type="submit" class="btn btn-small" title="Check all feeds for new episodes"><i data-lucide="refresh-cw" style="width:14px;height:14px;"></i> Check Now</button>
-</form>
-{% endblock %}
 
 {% block content %}
 <h1>Feeds</h1>
@@ -80,7 +22,6 @@
 {% for feed in feeds %}
 <div class="card feed-card" style="animation-delay:{{ loop.index0 * 30 }}ms;" data-feed-type="{{ feed.feed_type }}" data-feed-name="{{ (feed.display_name or feed.name)|lower }}" data-llm="{{ feed.llm_trim }}" data-sb="{{ feed.sponsorblock }}" data-cuts="{{ feed.llm_cuts_total + feed.sb_cuts_total }}" data-last-checked="{{ feed.last_checked_at or '' }}">
   <div class="feed-card-layout">
-    <!-- Left: artwork -->
     <div class="feed-artwork">
       {% if feed.image_url %}
       <img src="{{ feed.image_url }}" alt="">
@@ -90,10 +31,7 @@
       <div class="feed-artwork-placeholder" style="background:{{ colors[(feed.name|length) % colors|length] }};">{{ initial }}</div>
       {% endif %}
     </div>
-
-    <!-- Right: content -->
     <div class="feed-content">
-      <!-- Row 1: Title + badges + buttons -->
       <div class="feed-header">
         <div class="feed-title-area">
           <strong>{{ feed.display_name or feed.name }}</strong>
@@ -109,23 +47,19 @@
           <a href="{{ feed.pc_url }}" class="btn btn-secondary btn-small" style="background:#f43e37;" target="_blank" title="Open in Pocket Casts"><i data-lucide="headphones" style="width:14px;height:14px;"></i> PC</a>
           {% endif %}
           <button class="btn btn-small" onclick="toggleEdit('{{ feed.name }}')"><i data-lucide="settings" style="width:14px;height:14px;"></i> Edit</button>
-          <form method="post" action="/ui/feed-action" style="display:inline;"
-                onsubmit="return confirm('Mark {{ feed.name }} as caught up? This deletes all downloaded files and sets date_cutoff to today.')">
-            <input type="hidden" name="feed_name" value="{{ feed.name }}">
-            <input type="hidden" name="action" value="catchup">
-            <button type="submit" class="btn btn-danger btn-small"><i data-lucide="check-circle" style="width:14px;height:14px;"></i> Caught Up</button>
-          </form>
+          <button class="btn btn-danger btn-small"
+                  hx-post="/ui/feed-action" hx-target="#main-content"
+                  hx-vals='{"feed_name":"{{ feed.name }}","action":"catchup"}'
+                  hx-confirm="Mark {{ feed.name }} as caught up? This deletes all downloaded files and sets date_cutoff to today.">
+            <i data-lucide="check-circle" style="width:14px;height:14px;"></i> Caught Up
+          </button>
         </div>
       </div>
-
-      <!-- Row 2: URL + last checked -->
       <div class="feed-meta">
         <span class="feed-url">{{ feed.url }}</span>
         {% if feed.checked_relative %}<span> &mdash; Checked {{ feed.checked_relative }}</span>{% endif %}
         {% if feed.last_error %}<span class="feed-error"> &mdash; Error: {{ feed.last_error }}</span>{% endif %}
       </div>
-
-      <!-- Row 3: Stats chips -->
       <div class="feed-stats">
         <span class="stat-chip">{{ feed.in_rss | commafy }} in RSS</span>
         {% if feed.feed_type == 'podcast' %}<span class="stat-chip">{{ feed.source_count | commafy }} source</span>{% endif %}
@@ -135,8 +69,6 @@
         {% if feed.disk_usage_mb %}<span class="stat-chip">{{ feed.disk_usage_display }}</span>{% endif %}
         {% if feed.latest_episode_date %}<span class="stat-chip">Latest: {{ feed.latest_episode_date }}</span>{% endif %}
       </div>
-
-      <!-- Row 4: Queue (only when active) -->
       {% if feed.queued or feed.whisper_pending or feed.claude_pending %}
       <div class="feed-queue">
         <span class="queue-dot"></span>
@@ -148,7 +80,7 @@
 
   <!-- Edit panel (hidden) -->
   <div id="edit-{{ feed.name }}" class="hidden" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
-    <form method="post" action="/ui/feed-action">
+    <form hx-post="/ui/feed-action" hx-target="#main-content">
       <input type="hidden" name="feed_name" value="{{ feed.name }}">
       <input type="hidden" name="action" value="update">
       <div class="form-row">
@@ -244,18 +176,18 @@
     </form>
 
     <div style="display:flex; gap:8px; margin-top:12px; padding-top:8px; border-top:1px solid var(--border);">
-      <form method="post" action="/ui/feed-action" style="display:flex; gap:8px; align-items:center;">
+      <form hx-post="/ui/feed-action" hx-target="#main-content" style="display:flex; gap:8px; align-items:center;">
         <input type="hidden" name="feed_name" value="{{ feed.name }}">
         <input type="hidden" name="action" value="rename">
         <input type="text" name="new_name" placeholder="New name" style="width:150px;" class="btn-small">
         <button type="submit" class="btn btn-secondary btn-small"><i data-lucide="edit-3" style="width:14px;height:14px;"></i> Rename</button>
       </form>
-      <form method="post" action="/ui/feed-action" style="display:inline;"
-            onsubmit="return confirm('Delete feed {{ feed.name }}? This removes all episodes and files.')">
-        <input type="hidden" name="feed_name" value="{{ feed.name }}">
-        <input type="hidden" name="action" value="delete">
-        <button type="submit" class="btn btn-danger btn-small"><i data-lucide="trash-2" style="width:14px;height:14px;"></i> Delete</button>
-      </form>
+      <button class="btn btn-danger btn-small"
+              hx-post="/ui/feed-action" hx-target="#main-content"
+              hx-vals='{"feed_name":"{{ feed.name }}","action":"delete"}'
+              hx-confirm="Delete feed {{ feed.name }}? This removes all episodes and files.">
+        <i data-lucide="trash-2" style="width:14px;height:14px;"></i> Delete
+      </button>
     </div>
   </div>
 </div>
@@ -268,133 +200,61 @@
 </div>
 {% endif %}
 
-<!-- Activity footer -->
-<div id="activity-footer" class="activity-footer activity-collapsed">
-  <div class="activity-header" onclick="toggleActivityLog()">
-    <span id="activity-status">Loading...</span>
-    <span id="activity-toggle">&#9650; Expand</span>
-  </div>
-  <div id="activity-body" class="activity-body">
-    <div id="activity-status-bar" class="activity-status-bar"></div>
-    <div id="activity-entries"></div>
-  </div>
-</div>
-
 <script>
 function toggleEdit(name) {
-  const el = document.getElementById('edit-' + name);
-  el.classList.toggle('hidden');
+  document.getElementById('edit-' + name).classList.toggle('hidden');
 }
 function copyRSS(name) {
-  const url = '{{ auth_base_url }}/feed/' + name;
-  navigator.clipboard.writeText(url).then(() => {
-    const btn = event.target;
-    const orig = btn.textContent;
+  var url = '{{ auth_base_url }}/feed/' + name;
+  navigator.clipboard.writeText(url).then(function() {
+    var btn = event.target;
+    var orig = btn.textContent;
     btn.textContent = 'Copied!';
-    setTimeout(() => btn.textContent = orig, 1500);
+    setTimeout(function() { btn.textContent = orig; }, 1500);
   });
 }
 
-/* Sort with active state + localStorage */
 function sortFeeds(by) {
-  const container = document.getElementById('feed-list');
-  const cards = Array.from(container.children);
-  cards.sort((a, b) => {
+  var container = document.getElementById('feed-list');
+  var cards = Array.from(container.children);
+  cards.sort(function(a, b) {
     if (by === 'name') return a.dataset.feedName.localeCompare(b.dataset.feedName);
     if (by === 'cuts') return parseInt(b.dataset.cuts) - parseInt(a.dataset.cuts);
     if (by === 'latest') return (b.dataset.lastChecked || '').localeCompare(a.dataset.lastChecked || '');
     if (by === 'oldest') return (a.dataset.lastChecked || '').localeCompare(b.dataset.lastChecked || '');
     return 0;
   });
-  cards.forEach(c => container.appendChild(c));
-  document.querySelectorAll('.sort-btn').forEach(btn => {
+  cards.forEach(function(c) { container.appendChild(c); });
+  document.querySelectorAll('.sort-btn').forEach(function(btn) {
     btn.classList.toggle('btn-filter-active', btn.dataset.sort === by);
     btn.classList.toggle('btn-secondary', btn.dataset.sort !== by);
   });
   localStorage.setItem('siphon-sort', by);
 }
 
-/* Filter with active state */
-var currentFilter = 'all';
 function filterFeeds(type) {
-  currentFilter = type;
-  document.querySelectorAll('#feed-list .card').forEach(card => {
+  document.querySelectorAll('#feed-list .card').forEach(function(card) {
     if (type === 'all') card.style.display = '';
     else if (type === 'youtube') card.style.display = card.dataset.feedType === 'youtube' ? '' : 'none';
     else if (type === 'podcast') card.style.display = card.dataset.feedType === 'podcast' ? '' : 'none';
     else if (type === 'llm') card.style.display = card.dataset.llm === 'True' ? '' : 'none';
     else if (type === 'sb') card.style.display = card.dataset.sb === 'True' ? '' : 'none';
   });
-  document.querySelectorAll('.filter-btn').forEach(btn => {
+  document.querySelectorAll('.filter-btn').forEach(function(btn) {
     btn.classList.toggle('btn-filter-active', btn.dataset.filter === type);
     btn.classList.toggle('btn-secondary', btn.dataset.filter !== type);
   });
 }
 
-/* Search */
+/* Search filters client-side */
 function searchFeeds() {
-  const q = document.getElementById('feed-search').value.toLowerCase();
-  document.querySelectorAll('#feed-list .card').forEach(card => {
-    const name = card.dataset.feedName;
-    card.style.display = (!q || name.includes(q)) ? '' : 'none';
+  var q = document.getElementById('feed-search').value.toLowerCase();
+  document.querySelectorAll('#feed-list .card').forEach(function(card) {
+    card.style.display = (!q || card.dataset.feedName.includes(q)) ? '' : 'none';
   });
 }
-document.getElementById('feed-search').addEventListener('input', searchFeeds);
 
-/* Activity log */
-var activityExpanded = localStorage.getItem('siphon-activity-expanded') === 'true';
-
-function toggleActivityLog() {
-  activityExpanded = !activityExpanded;
-  var footer = document.getElementById('activity-footer');
-  footer.classList.toggle('activity-collapsed', !activityExpanded);
-  footer.classList.toggle('activity-expanded', activityExpanded);
-  document.getElementById('activity-toggle').innerHTML = activityExpanded ? '&#9660; Collapse' : '&#9650; Expand';
-  localStorage.setItem('siphon-activity-expanded', activityExpanded);
-}
-
-function initActivityState() {
-  var footer = document.getElementById('activity-footer');
-  if (activityExpanded) {
-    footer.classList.remove('activity-collapsed');
-    footer.classList.add('activity-expanded');
-    document.getElementById('activity-toggle').innerHTML = '&#9660; Collapse';
-  }
-}
-
-function fetchActivityLog() {
-  fetch('/ui/activity-log-data')
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      document.getElementById('activity-status').textContent = data.status || 'Idle';
-      var sys = data.system || {};
-      var barHtml = '';
-      if (sys.pause_state && sys.pause_state !== 'running') {
-        barHtml += '<span style="color:var(--warning);">[' + sys.pause_state.replace('_', ' ') + ']</span>';
-      }
-      barHtml += '<span>Limits: YT ' + (sys.youtube_downloads_this_hour||0) + '/' + (sys.youtube_downloads_max||0) + '/hr';
-      barHtml += ' | Pod ' + (sys.podcast_downloads_this_hour||0) + '/' + (sys.podcast_downloads_max||0) + '/hr</span>';
-      barHtml += '<span>Queued: DL ' + (sys.dl_queue||0) + ' | Whisper ' + (sys.whisper_queue||0) + ' | Claude ' + (sys.claude_queue||0) + '</span>';
-      barHtml += '<span>Active: DL ' + (sys.active_dl||0) + ' | Whisper ' + (sys.active_whisper||0) + ' | Claude ' + (sys.active_claude||0) + '</span>';
-      document.getElementById('activity-status-bar').innerHTML = barHtml;
-      var entries = data.entries || [];
-      var maxEntries = activityExpanded ? entries.length : 5;
-      var html = '';
-      for (var i = 0; i < Math.min(entries.length, maxEntries); i++) {
-        var e = entries[i];
-        var cls = e.level || 'info';
-        var feed = e.feed ? '[' + e.feed + '] ' : '';
-        html += '<div class="log-entry ' + cls + '">' + e.time + ' ' + feed + e.message + '</div>';
-      }
-      if (!entries.length) {
-        html = '<div style="color:var(--text-muted);">No activity yet. Hit "Check Now" to start.</div>';
-      }
-      document.getElementById('activity-entries').innerHTML = html;
-    })
-    .catch(function() {});
-}
-
-/* Restore sort from localStorage and apply URL params */
+/* Init sort/filter from localStorage and URL params */
 (function() {
   var savedSort = localStorage.getItem('siphon-sort');
   if (savedSort) sortFeeds(savedSort);
@@ -404,26 +264,17 @@ function fetchActivityLog() {
       btn.classList.toggle('btn-secondary', btn.dataset.sort !== 'name');
     });
   }
-
-  /* Apply filter from URL param */
   var params = new URLSearchParams(window.location.search);
   var filterParam = params.get('filter');
   if (filterParam) filterFeeds(filterParam);
   else filterFeeds('all');
-
-  /* Apply search from URL param */
   var searchParam = params.get('q');
   if (searchParam) {
-    document.getElementById('feed-search').value = searchParam;
-    searchFeeds();
+    var searchBox = document.getElementById('feed-search');
+    if (searchBox) { searchBox.value = searchParam; searchFeeds(); }
   }
 })();
 
-initActivityState();
-fetchActivityLog();
-setInterval(fetchActivityLog, 5000);
-
-/* Re-render Lucide icons after dynamic content */
 if (typeof lucide !== 'undefined') lucide.createIcons();
 </script>
 {% endblock %}
