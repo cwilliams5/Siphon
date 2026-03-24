@@ -209,6 +209,7 @@ async def _check_youtube_feed(resolved, config, db) -> None:
     entries = await loop.run_in_executor(
         None, list_videos, channel_id, api_key,
         resolved.date_cutoff, known_ids, 200, cooldown_hours,
+        config.youtube.country,
     )
 
     new_count = _insert_youtube_entries(entries, resolved, db)

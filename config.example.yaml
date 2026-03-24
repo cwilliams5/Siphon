@@ -10,6 +10,7 @@ auth:
 
 youtube:
   api_key: "YOUR_YOUTUBE_DATA_API_KEY"
+  country: "US"  # ISO country code — region-blocked videos are silently skipped
 
 storage:
   download_dir: "/path/to/downloads"

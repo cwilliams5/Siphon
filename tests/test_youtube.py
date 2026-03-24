@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from siphon.youtube import _parse_iso8601_duration, _enrich_durations
+from siphon.youtube import _parse_iso8601_duration, _enrich_video_details, _is_region_blocked
 
 
 class TestParseISO8601Duration:
@@ -53,7 +53,7 @@ class TestEnrichDurations:
             {"id": "vid1", "duration": None},
             {"id": "vid2", "duration": None},
         ]
-        _enrich_durations(videos, "fake-key", 4)
+        _enrich_video_details(videos, "fake-key", 4)
         assert videos[0]["duration"] == 630
         assert videos[1]["duration"] == 300
 
@@ -68,7 +68,7 @@ class TestEnrichDurations:
             {"id": "vid1", "duration": None},
             {"id": "vid2", "duration": None},
         ]
-        _enrich_durations(videos, "fake-key", 4)
+        _enrich_video_details(videos, "fake-key", 4)
         assert videos[0]["duration"] == 600
         assert videos[1]["duration"] is None
 
@@ -76,13 +76,66 @@ class TestEnrichDurations:
     def test_api_failure_leaves_durations_unchanged(self, mock_api):
         mock_api.side_effect = Exception("quota exceeded")
         videos = [{"id": "vid1", "duration": None}]
-        _enrich_durations(videos, "fake-key", 4)
+        _enrich_video_details(videos, "fake-key", 4)
         assert videos[0]["duration"] is None
 
     @patch("siphon.youtube._api_get")
     def test_batches_over_50(self, mock_api):
         mock_api.return_value = {"items": []}
         videos = [{"id": f"vid{i}", "duration": None} for i in range(75)]
-        _enrich_durations(videos, "fake-key", 4)
+        _enrich_video_details(videos, "fake-key", 4)
         # Should make 2 API calls (50 + 25)
         assert mock_api.call_count == 2
+
+    @patch("siphon.youtube._api_get")
+    def test_region_blocked_videos_removed(self, mock_api):
+        mock_api.return_value = {
+            "items": [
+                {"id": "vid1", "contentDetails": {"duration": "PT10M"}},
+                {"id": "vid2", "contentDetails": {
+                    "duration": "PT20M",
+                    "regionRestriction": {"blocked": ["US", "CA"]},
+                }},
+            ]
+        }
+        videos = [
+            {"id": "vid1", "duration": None, "title": "OK"},
+            {"id": "vid2", "duration": None, "title": "Blocked"},
+        ]
+        _enrich_video_details(videos, "fake-key", 4, "US")
+        assert len(videos) == 1
+        assert videos[0]["id"] == "vid1"
+
+    @patch("siphon.youtube._api_get")
+    def test_region_allowed_list_filters(self, mock_api):
+        mock_api.return_value = {
+            "items": [
+                {"id": "vid1", "contentDetails": {
+                    "duration": "PT10M",
+                    "regionRestriction": {"allowed": ["GB", "AU"]},
+                }},
+            ]
+        }
+        videos = [{"id": "vid1", "duration": None, "title": "UK only"}]
+        _enrich_video_details(videos, "fake-key", 4, "US")
+        assert len(videos) == 0
+
+
+class TestIsRegionBlocked:
+    def test_blocked_list_contains_country(self):
+        assert _is_region_blocked({"regionRestriction": {"blocked": ["US", "CA"]}}, "US") is True
+
+    def test_blocked_list_does_not_contain_country(self):
+        assert _is_region_blocked({"regionRestriction": {"blocked": ["GB"]}}, "US") is False
+
+    def test_allowed_list_contains_country(self):
+        assert _is_region_blocked({"regionRestriction": {"allowed": ["US", "CA"]}}, "US") is False
+
+    def test_allowed_list_does_not_contain_country(self):
+        assert _is_region_blocked({"regionRestriction": {"allowed": ["GB", "AU"]}}, "US") is True
+
+    def test_no_restriction(self):
+        assert _is_region_blocked({}, "US") is False
+
+    def test_case_insensitive(self):
+        assert _is_region_blocked({"regionRestriction": {"blocked": ["us"]}}, "US") is True

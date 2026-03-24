@@ -114,6 +114,7 @@ def list_videos(
     known_ids: set[str] | None = None,
     max_pages: int = 200,
     cooldown_hours: int = 4,
+    country: str = "US",
 ) -> list[dict]:
     """List videos from a channel using playlistItems (1 unit per 50 videos).
 
@@ -203,9 +204,9 @@ def list_videos(
         if not page_token:
             break
 
-    # Fetch durations via videos.list (1 unit per 50 videos)
+    # Fetch durations + region restrictions via videos.list (1 unit per 50 videos)
     if videos:
-        _enrich_durations(videos, api_key, cooldown_hours)
+        _enrich_video_details(videos, api_key, cooldown_hours, country)
 
     logger.info("YouTube API: %d videos from channel %s (%d pages)",
                 len(videos), channel_id, page_num + 1)
@@ -223,10 +224,22 @@ def _parse_iso8601_duration(s: str) -> int:
     return hours * 3600 + mins * 60 + secs
 
 
-def _enrich_durations(videos: list[dict], api_key: str, cooldown_hours: int) -> None:
-    """Batch-fetch durations from videos.list and update the video dicts."""
+def _is_region_blocked(content_details: dict, country: str) -> bool:
+    """Check if a video is blocked in the given country."""
+    restriction = content_details.get("regionRestriction", {})
+    blocked = restriction.get("blocked")
+    allowed = restriction.get("allowed")
+    if blocked and country.upper() in [c.upper() for c in blocked]:
+        return True
+    if allowed and country.upper() not in [c.upper() for c in allowed]:
+        return True
+    return False
+
+
+def _enrich_video_details(videos: list[dict], api_key: str, cooldown_hours: int, country: str = "US") -> None:
+    """Batch-fetch durations and region restrictions from videos.list."""
     video_ids = [v["id"] for v in videos]
-    durations = {}
+    details: dict[str, dict] = {}
 
     # videos.list accepts up to 50 IDs per call
     for i in range(0, len(video_ids), 50):
@@ -238,14 +251,24 @@ def _enrich_durations(videos: list[dict], api_key: str, cooldown_hours: int) -> 
                 "part": "contentDetails",
             }, cooldown_hours)
             for item in data.get("items", []):
-                vid = item["id"]
-                raw = item.get("contentDetails", {}).get("duration", "")
-                durations[vid] = _parse_iso8601_duration(raw)
+                details[item["id"]] = item.get("contentDetails", {})
         except Exception as exc:
-            logger.warning("Failed to fetch durations: %s", exc)
+            logger.warning("Failed to fetch video details: %s", exc)
             return
 
+    # Update durations and mark region-blocked videos for removal
+    blocked_ids = set()
     for v in videos:
-        d = durations.get(v["id"])
-        if d is not None:
-            v["duration"] = d
+        cd = details.get(v["id"])
+        if cd is None:
+            continue
+        raw = cd.get("duration", "")
+        v["duration"] = _parse_iso8601_duration(raw)
+        if _is_region_blocked(cd, country):
+            blocked_ids.add(v["id"])
+            logger.info("Region-blocked in %s: %s (%s)", country, v["id"], v.get("title", ""))
+
+    # Remove blocked videos from the list
+    if blocked_ids:
+        videos[:] = [v for v in videos if v["id"] not in blocked_ids]
+        logger.info("Filtered %d region-blocked videos", len(blocked_ids))

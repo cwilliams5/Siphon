@@ -219,6 +219,7 @@ Available at `http://localhost:8585/ui/` (localhost only, no auth). Three themes
 |---------|-----|---------|-------------|
 | `youtube` | `api_key` | required | YouTube Data API v3 key |
 | `youtube` | `quota_cooldown_hours` | `4` | Hours to pause after API 403 |
+| `youtube` | `country` | `US` | ISO country code for filtering region-blocked videos |
 | `server` | `timezone` | `America/Los_Angeles` | Timezone for activity log timestamps |
 | `server` | `media_base_url` | `""` | Tailnet-internal URL for media files |
 | `schedule` | `check_interval_minutes` | `30` | How often to check for new episodes |
