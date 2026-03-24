@@ -195,9 +195,18 @@ RSS feeds are served over HTTPS with Basic Auth. Media files are served over Tai
 
 ## Web UI
 
-Available at `http://localhost:8585/ui/` (localhost only, no auth). Three themes: Light, Dark, Black.
+Available at `http://localhost:8585/ui/` (localhost only, no auth). Three themes: Light, Dark, Black. SPA-like navigation via htmx.
+
+<p align="center">
+  <img src="img/dashboard.png" alt="Dashboard" width="800">
+</p>
 
 - **Dashboard** with system stats, lifetime metrics, and insights (most stale feeds, disk hogs, longest processing, cut stats)
+
+<p align="center">
+  <img src="img/feeds.png" alt="Feeds" width="800">
+</p>
+
 - **Feed management** — add/edit/delete feeds with all per-feed config options, type-aware forms (YouTube vs podcast)
 - **OPML import** for bulk podcast migration from Pocket Casts or other apps
 - **Live activity log** in sticky footer with queue status, worker activity, and timing
