@@ -36,3 +36,4 @@ media/
 *.db-wal
 config.yaml
 siphon.bat
+temp.txt

@@ -5,16 +5,22 @@ Self-hosted podcast pipeline: YouTube channels + podcast RSS feeds → SponsorBl
 
 ## Running & Testing
 ```bash
-# Run the app
+# Run the app (config lives outside repo — never commit secrets)
 python -m siphon -c "/path/to/siphon-data/config.yaml"
 
 # Run tests (380+, must all pass before committing)
 python -m pytest tests/ -x -q
-
-# Personal config (outside repo, contains secrets)
-/path/to/siphon-data/config.yaml
-/path/to/siphon-data/siphon.db
 ```
+
+## Security
+This is a public repo. NEVER commit:
+- config.yaml (contains API keys, auth credentials, Tailscale hostname)
+- Database files (.db)
+- Media files
+- Personal paths, hostnames, or feed URLs
+- temp.txt or any scratch files with personal data
+
+All personal config/data lives outside the repo. The .gitignore covers config.yaml, *.db, media/, and temp.txt.
 
 ## Architecture
 Three-queue pipeline: Download → Whisper → Claude. Each runs independently on its own scheduler interval. Episodes flow: `pending` → `eligible` → `downloading` → `pending_whisper` → `pending_claude` → `done`. Feeds without LLM trim skip directly to `done`.
