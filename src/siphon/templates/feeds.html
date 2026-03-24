@@ -195,7 +195,7 @@ testCookies();
     <div class="card insight-card" style="padding:12px; border-left:3px solid var(--badge-llm);">
       <div class="insight-title"><i data-lucide="timer" style="width:14px;height:14px;"></i> Longest Processing</div>
       {% for item in insights.longest_proc %}
-      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.feed }} - {{ item.title }} &mdash; {{ item.time_display }}</div>
+      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">({{ item.time_display }}) {{ item.feed }} - {{ item.title }}</div>
       {% endfor %}
     </div>
     {% endif %}
