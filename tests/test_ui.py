@@ -438,3 +438,96 @@ class TestCheckNow:
         db = app.state.db
         feed = db.get_feed("test-feed")
         assert feed["last_error"] == "boom"
+
+
+# ------------------------------------------------------------------ #
+# htmx integration tests
+# ------------------------------------------------------------------ #
+
+HTMX_HEADERS = {"HX-Request": "true"}
+
+
+class TestHtmxNavigation:
+    async def test_stats_htmx_returns_content_only(self, client):
+        resp = await client.get("/ui/", headers=HTMX_HEADERS)
+        assert resp.status_code == 200
+        assert "Dashboard" in resp.text
+        # Should NOT contain the full page shell
+        assert "<html" not in resp.text
+        assert "activity-footer" not in resp.text
+
+    async def test_feeds_htmx_returns_content_only(self, client):
+        resp = await client.get("/ui/feeds", headers=HTMX_HEADERS)
+        assert resp.status_code == 200
+        assert "test-feed" in resp.text
+        assert "<html" not in resp.text
+
+    async def test_add_page_htmx_returns_content_only(self, client):
+        resp = await client.get("/ui/add", headers=HTMX_HEADERS)
+        assert resp.status_code == 200
+        assert "Add Feed" in resp.text
+        assert "<html" not in resp.text
+
+    async def test_import_page_htmx_returns_content_only(self, client):
+        resp = await client.get("/ui/import", headers=HTMX_HEADERS)
+        assert resp.status_code == 200
+        assert "<html" not in resp.text
+
+    async def test_feeds_search_htmx(self, client):
+        resp = await client.get("/ui/feeds?q=test", headers=HTMX_HEADERS)
+        assert resp.status_code == 200
+        assert "test-feed" in resp.text
+        assert "<html" not in resp.text
+
+
+class TestHtmxActions:
+    async def test_check_now_htmx_returns_204(self, client):
+        resp = await client.post("/ui/check-now", headers=HTMX_HEADERS)
+        assert resp.status_code == 204
+
+    async def test_add_feed_htmx_returns_hx_redirect(self, client):
+        resp = await client.post("/ui/add", data={
+            "url": "https://example.com/podcast/rss",
+            "name": "htmx-test",
+            "mode": "",
+            "quality": "",
+            "llm_trim": "",
+            "date_cutoff": "",
+            "sponsorblock_delay_minutes": "",
+            "title_exclude": "",
+            "claude_prompt_extra": "",
+        }, headers=HTMX_HEADERS, follow_redirects=False)
+        assert resp.headers.get("HX-Redirect") == "/ui/feeds"
+
+    async def test_feed_action_htmx_returns_hx_redirect(self, client):
+        resp = await client.post("/ui/feed-action", data={
+            "feed_name": "test-feed",
+            "action": "update",
+            "mode": "video",
+            "quality": "1440",
+            "sponsorblock": "true",
+            "llm_trim": "false",
+            "block_shorts": "true",
+            "min_duration_seconds": "60",
+            "date_cutoff": "",
+            "sponsorblock_delay_minutes": "0",
+            "title_exclude": "",
+            "claude_prompt_extra": "",
+        }, headers=HTMX_HEADERS, follow_redirects=False)
+        assert resp.headers.get("HX-Redirect") == "/ui/feeds"
+
+    async def test_delete_feed_htmx_returns_hx_redirect(self, client, config):
+        # Add a feed to delete
+        await client.post("/ui/add", data={
+            "url": "https://www.youtube.com/@ToDelete",
+            "name": "to-delete",
+            "mode": "", "quality": "", "llm_trim": "",
+            "date_cutoff": "", "sponsorblock_delay_minutes": "",
+            "title_exclude": "", "claude_prompt_extra": "",
+        }, follow_redirects=False)
+
+        resp = await client.post("/ui/feed-action", data={
+            "feed_name": "to-delete",
+            "action": "delete",
+        }, headers=HTMX_HEADERS, follow_redirects=False)
+        assert resp.headers.get("HX-Redirect") == "/ui/feeds"
