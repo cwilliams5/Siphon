@@ -58,24 +58,31 @@ async def client(config, tmp_path):
         os.chdir(old_cwd)
 
 
+class TestStatsPage:
+    async def test_stats_page_no_auth_required(self, client):
+        resp = await client.get("/ui/")
+        assert resp.status_code == 200
+        assert "Dashboard" in resp.text
+
+    async def test_stats_page_shows_disk_usage(self, client):
+        resp = await client.get("/ui/")
+        assert "Disk /" in resp.text
+
+    async def test_stats_page_has_check_now_button(self, client):
+        resp = await client.get("/ui/")
+        assert "Check Now" in resp.text
+
+
 class TestFeedsPage:
     async def test_feeds_page_no_auth_required(self, client):
-        resp = await client.get("/ui/")
+        resp = await client.get("/ui/feeds")
         assert resp.status_code == 200
         assert "Feeds" in resp.text
 
     async def test_feeds_page_shows_feed(self, client):
-        resp = await client.get("/ui/")
+        resp = await client.get("/ui/feeds")
         assert "test-feed" in resp.text
         assert "youtube" in resp.text
-
-    async def test_feeds_page_shows_disk_usage(self, client):
-        resp = await client.get("/ui/")
-        assert "Disk /" in resp.text
-
-    async def test_feeds_page_has_check_now_button(self, client):
-        resp = await client.get("/ui/")
-        assert "Check Feeds Now" in resp.text
 
 
 class TestAddFeed:

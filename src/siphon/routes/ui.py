@@ -293,7 +293,7 @@ async def activity_log_page(request: Request):
 # ------------------------------------------------------------------ #
 
 @router.get("/", response_class=HTMLResponse)
-async def feeds_page(request: Request):
+async def stats_page(request: Request):
     _reload_config(request.app)
     config = request.app.state.config
     db = request.app.state.db
@@ -306,7 +306,6 @@ async def feeds_page(request: Request):
 
     status = _get_system_status(config, db)
 
-    # Top stats: aggregate cuts and avg processing time
     agg = db.conn.execute(
         "SELECT "
         "  COALESCE(SUM(llm_cuts_applied), 0) AS total_llm_cuts, "
@@ -344,19 +343,16 @@ async def feeds_page(request: Request):
     purged_count = int(extra_stats["purged"] or 0)
     crap_filtered = int(extra_stats["crap_filtered"] or 0)
 
-    # Insights
     insights = _compute_insights(db, config)
 
-    # Build auth-embedded base URL for RSS links
-    # https://user:pass@host/feed/name
-    from urllib.parse import urlparse
-    parsed = urlparse(config.server.base_url)
-    auth_base_url = f"{parsed.scheme}://{config.auth.username}:{config.auth.password}@{parsed.netloc}"
+    podcast_count = sum(1 for f in feeds if f["feed_type"] == "podcast")
+    youtube_count = sum(1 for f in feeds if f["feed_type"] == "youtube")
 
-    return templates.TemplateResponse("feeds.html", {
+    return templates.TemplateResponse("stats.html", {
         "request": request,
-        "active_page": "feeds",
-        "feeds": feeds,
+        "active_page": "stats",
+        "podcast_count": podcast_count,
+        "youtube_count": youtube_count,
         "disk_usage_gb": round(disk_usage / (1024 ** 3), 1),
         "max_disk_gb": config.storage.max_disk_gb,
         "total_episodes": total_episodes,
@@ -368,7 +364,29 @@ async def feeds_page(request: Request):
         "avg_processing_display": avg_processing_display,
         "status": status,
         "insights": insights,
+        "messages": _get_messages(request),
+    })
+
+
+@router.get("/feeds", response_class=HTMLResponse)
+async def feeds_page(request: Request):
+    _reload_config(request.app)
+    config = request.app.state.config
+
+    feeds = _get_feed_display(request)
+
+    from urllib.parse import urlparse
+    parsed = urlparse(config.server.base_url)
+    auth_base_url = f"{parsed.scheme}://{config.auth.username}:{config.auth.password}@{parsed.netloc}"
+
+    search_query = request.query_params.get("q", "")
+
+    return templates.TemplateResponse("feeds.html", {
+        "request": request,
+        "active_page": "feeds",
+        "feeds": feeds,
         "auth_base_url": auth_base_url,
+        "search_query": search_query,
         "messages": _get_messages(request),
     })
 
@@ -780,7 +798,7 @@ async def add_feed_submit(
 
     _save_config(config)
 
-    return RedirectResponse("/ui/", status_code=303)
+    return RedirectResponse("/ui/feeds", status_code=303)
 
 
 # ------------------------------------------------------------------ #
@@ -827,7 +845,7 @@ async def feed_action(
     elif action == "catchup":
         return _do_catchup(config, db, feed_name)
     else:
-        return RedirectResponse("/ui/", status_code=303)
+        return RedirectResponse("/ui/feeds", status_code=303)
 
 
 def _do_update(config, feed_name, mode, quality, sponsorblock,
@@ -862,17 +880,17 @@ def _do_update(config, feed_name, mode, quality, sponsorblock,
             config.feeds[i] = FeedConfig(**update)
             break
     _save_config(config)
-    return RedirectResponse("/ui/", status_code=303)
+    return RedirectResponse("/ui/feeds", status_code=303)
 
 
 def _do_rename(config, db, feed_name, new_name):
     new_name = _slugify(new_name)
     if not new_name or new_name == feed_name:
-        return RedirectResponse("/ui/", status_code=303)
+        return RedirectResponse("/ui/feeds", status_code=303)
 
     # Check for duplicate
     if any(fc.name == new_name for fc in config.feeds):
-        return RedirectResponse("/ui/", status_code=303)
+        return RedirectResponse("/ui/feeds", status_code=303)
 
     # Update config
     for i, fc in enumerate(config.feeds):
@@ -911,7 +929,7 @@ def _do_rename(config, db, feed_name, new_name):
         pass  # Old dir didn't exist or had an invalid name — no files to move
 
     _save_config(config)
-    return RedirectResponse("/ui/", status_code=303)
+    return RedirectResponse("/ui/feeds", status_code=303)
 
 
 def _do_delete(config, db, feed_name):
@@ -933,7 +951,7 @@ def _do_delete(config, db, feed_name):
     db.delete_episodes_by_feed(feed_name)
     db.delete_feed(feed_name)
     _save_config(config)
-    return RedirectResponse("/ui/", status_code=303)
+    return RedirectResponse("/ui/feeds", status_code=303)
 
 
 def _do_catchup(config, db, feed_name):
@@ -997,7 +1015,7 @@ def _do_catchup(config, db, feed_name):
         db.update_episode_status(ep["video_id"], feed_name, "pruned")
 
     _save_config(config)
-    return RedirectResponse("/ui/", status_code=303)
+    return RedirectResponse("/ui/feeds", status_code=303)
 
 
 # ------------------------------------------------------------------ #
@@ -1106,7 +1124,7 @@ async def import_confirm(request: Request):
         imported += 1
 
     _save_config(config)
-    return RedirectResponse(f"/ui/?imported={imported}", status_code=303)
+    return RedirectResponse(f"/ui/feeds?imported={imported}", status_code=303)
 
 
 # ------------------------------------------------------------------ #

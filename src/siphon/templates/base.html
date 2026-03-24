@@ -355,7 +355,8 @@
 <body>
   <div class="nav">
     <img src="/ui/img/header-logo.png" alt="Siphon" style="height:28px; margin-right:8px;" onerror="this.style.display='none'">
-    <a href="/ui/" class="{% if active_page == 'feeds' %}active{% endif %}" title="View and manage feeds"><i data-lucide="rss" style="width:16px;height:16px;"></i> Feeds</a>
+    <a href="/ui/" class="{% if active_page == 'stats' %}active{% endif %}" title="Dashboard stats and insights"><i data-lucide="bar-chart-2" style="width:16px;height:16px;"></i> Stats</a>
+    <a href="/ui/feeds" class="{% if active_page == 'feeds' %}active{% endif %}" title="View and manage feeds"><i data-lucide="rss" style="width:16px;height:16px;"></i> Feeds</a>
     <a href="/ui/add" class="{% if active_page == 'add' %}active{% endif %}" title="Add a new feed"><i data-lucide="plus-circle" style="width:16px;height:16px;"></i> Add Feed</a>
     <a href="/ui/import" class="{% if active_page == 'import' %}active{% endif %}" title="Import feeds from OPML file"><i data-lucide="upload" style="width:16px;height:16px;"></i> OPML Import</a>
     <div class="nav-spacer"></div>
