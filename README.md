@@ -4,7 +4,7 @@
 
 # Siphon
 
-Self-hosted podcast pipeline that downloads YouTube channels and podcast feeds, filters garbage (youtube shorts, minimum length, title filter), strips ads (or any content - intros, credits, etc.) using SponsorBlock + LLM analysis (Whisper + Claude), and serves clean RSS feeds to your podcast app over Tailscale. Configurable per feed. 
+Self-hosted podcast pipeline that downloads YouTube channels and podcast feeds, filters garbage (youtube shorts, minimum length, title filter), strips ads (or any content - intros, credits, etc.) using SponsorBlock + LLM analysis (Whisper + Claude), and serves clean RSS feeds to your podcast app over Tailscale. Configurable per feed.
 
 Built for a very specific stack: **Youtube API key, Tailscale Funnel, Pocket Casts, Claude Code (Max subscription), Firefox cookies for YouTube Premium**. It works great for that. If your setup is different, expect to adapt.
 
@@ -29,6 +29,137 @@ Built for a very specific stack: **Youtube API key, Tailscale Funnel, Pocket Cas
 - **Tailscale Funnel** for HTTPS RSS serving to Pocket Casts, media served over Tailnet only (no auth needed on your network)
 - **Per-feed control** &rarr; toggle SponsorBlock, LLM trim, short blocking per feed; filter by title, duration, date; supplement or fully replace the Claude prompt per feed
 - **Auto-ban** for vulnerability scanners (fail2ban-style IP blocking)
+
+## Web UI
+
+Available at `http://localhost:8585/ui/` (localhost only, no auth). Three themes: Light, Dark, Black. SPA-like navigation via htmx.
+
+- **Dashboard** with system stats, lifetime metrics, and insights (most stale feeds, disk hogs, longest processing, cut stats)
+- **Feed management** — add/edit/delete feeds with all per-feed config options, type-aware forms (YouTube vs podcast)
+- **OPML import** for bulk podcast migration from Pocket Casts or other apps
+- **Live activity log** in sticky footer with queue status, worker activity, and timing
+- **Sort & filter** — by name, latest, most cuts; filter by YouTube, Podcast, LLM, SponsorBlock
+- **Search** — instant feed search from the header
+- **Per-feed stats** — In RSS count, queue depths, SB/LLM cut totals
+- **Mark as Caught Up** — trims to 1 episode, sets date cutoff, cleans disk
+
+## System Tray
+
+- **Pause/Resume** — three-state (Running / Pending Pause / Paused) with graceful drain
+- **Whisper workers** — adjustable (1-5, for live system use vs overnight processing)
+- **Test YouTube Login** — verify Firefox cookie status
+- **Open Config** — launch web UI
+
+## Setup
+
+### Prerequisites
+
+- Python 3.11+
+- ffmpeg on PATH
+- Deno on PATH (for yt-dlp's YouTube challenge solver)
+- [Tailscale](https://tailscale.com/) with Funnel enabled and MagicDNS + HTTPS certs
+- [YouTube Data API v3](https://console.cloud.google.com/apis/api/youtube.googleapis.com) key
+- Firefox with YouTube Premium logged in (for cookies)
+- Claude Code CLI on PATH (Max subscription)
+- NVIDIA GPU (optional, for CUDA-accelerated Whisper — requires `nvidia-cublas-cu12` and `nvidia-cudnn-cu12`)
+
+### Install
+
+```bash
+git clone https://github.com/cwilliams5/Siphon.git
+cd Siphon
+pip install -e .
+
+# For CUDA Whisper acceleration (optional):
+pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
+```
+
+### Configure
+
+Copy `config.example.yaml` to your data directory (outside the repo — keep secrets out of git):
+
+```bash
+mkdir /path/to/siphon-data
+cp config.example.yaml /path/to/siphon-data/config.yaml
+```
+
+Edit the config with your Tailscale hostname, auth credentials, YouTube API key, and feed list.
+
+### Run
+
+```bash
+python -m siphon -c "/path/to/siphon-data/config.yaml"
+```
+
+Or create a batch file for windowless operation (Windows):
+
+```batch
+@echo off
+set PATH=%PATH%;C:\Users\you\.deno\bin
+cd /d "path\to\Siphon"
+pythonw -m siphon -c "path\to\siphon-data\config.yaml"
+```
+
+Use `--verbose` flag for console output. Use `--no-tray` to disable the system tray icon.
+
+### Tailscale Funnel
+
+```bash
+tailscale funnel --bg 8585
+```
+
+RSS feeds are served over HTTPS with Basic Auth. Media files are served over Tailnet only (no auth, requires Tailscale on your phone).
+
+### Pocket Casts
+
+1. Copy the RSS URL from the web UI (includes embedded auth credentials)
+2. Submit at [pocketcasts.com/submit](https://pocketcasts.com/submit) as a private feed
+3. Save the `pca.st/private/...` URL back in the feed's settings
+
+## Key config options
+
+| Section | Key | Default | Description |
+|---------|-----|---------|-------------|
+| `youtube` | `api_key` | required | YouTube Data API v3 key |
+| `youtube` | `quota_cooldown_hours` | `4` | Hours to pause after API 403 |
+| `youtube` | `country` | `US` | ISO country code for filtering region-blocked videos |
+| `server` | `timezone` | `America/Los_Angeles` | Timezone for activity log timestamps |
+| `server` | `media_base_url` | `""` | Tailnet-internal URL for media files |
+| `schedule` | `check_interval_minutes` | `30` | How often to check for new episodes |
+| `schedule` | `youtube_max_downloads_per_hour` | `10` | YouTube download rate limit |
+| `schedule` | `podcast_max_downloads_per_hour` | `120` | Podcast download rate limit |
+| `defaults` | `sponsorblock_delay_minutes` | `1440` | Wait for SB segments to be crowdsourced |
+| `defaults` | `llm_trim` | `false` | Enable Whisper + Claude ad detection |
+| `llm` | `whisper_model` | `base` | Whisper model size (tiny/base/small/medium/large) |
+| `llm` | `whisper_device` | `cpu` | Whisper device (`cpu` or `cuda`) |
+| `llm` | `whisper_workers` | `1` | Concurrent Whisper workers (CPU only, CUDA forced to 1) |
+| `llm` | `claude_concurrency` | `3` | Parallel Claude CLI invocations |
+| `llm` | `claude_model` | `claude-sonnet-4-6` | Claude model for ad detection |
+| `llm` | `claude_effort` | `medium` | Claude thinking depth (low/medium/high/max) |
+| `llm` | `word_timestamps_max_minutes` | `45` | Max episode length for word-level timestamps |
+| `llm` | `confidence_threshold` | `0.75` | Minimum confidence to cut a detected segment |
+| `storage` | `max_disk_gb` | `1000` | Auto-prune oldest episodes when exceeded |
+
+### Per-feed overrides
+
+Every feed can override the defaults above. Set these in `config.yaml` under each feed entry, or edit them in the web UI.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `sponsorblock` | `true` | Enable/disable SponsorBlock segment removal (YouTube only) |
+| `sponsorblock_delay_minutes` | `1440` | Wait time after publish for SB segments to be crowdsourced |
+| `llm_trim` | `false` | Enable Whisper + Claude ad detection for this feed |
+| `quality` | `1440` | YouTube video quality (`1440`, `1080`, or `max`) |
+| `block_shorts` | `true` | Filter out YouTube Shorts (< 60s) |
+| `min_duration_seconds` | `0` | Skip episodes shorter than this |
+| `date_cutoff` | none | Ignore episodes published before this date (YYYYMMDD) |
+| `title_exclude` | `[]` | Skip episodes whose title contains any of these strings |
+| `claude_prompt_extra` | none | Append additional instructions to the default Claude ad-detection prompt |
+| `claude_prompt_override` | none | Replace the default prompt entirely with a custom one |
+
+`claude_prompt_extra` is useful for feed-specific tuning — e.g. *"This is an interview podcast, a guest discussing their work is not an ad."*. `claude_prompt_override` replaces the entire prompt, giving full control over what Claude looks for.
+
+See `config.example.yaml` for the full schema.
 
 ## Architecture
 
@@ -130,6 +261,7 @@ Every extraction reads from the untouched original, so timestamps never shift. T
 - **Quota cooldown**: on 403, all YouTube API calls pause for configurable hours (default 4)
 - **Downloads**: yt-dlp with Firefox cookie integration for YouTube Premium, rate limited at 10/hr
 - **SponsorBlock**: segments counted and tracked per episode for insights
+- **Region filtering**: videos blocked in your country are silently skipped during discovery
 
 ### Podcast integration
 
@@ -138,144 +270,13 @@ Every extraction reads from the untouched original, so timestamps never shift. T
 - **Browser User-Agent** for hosts that block default Python agents
 - **Artwork**: pulled from RSS `<itunes:image>` and served in generated feeds
 
-## Setup
-
-### Prerequisites
-
-- Python 3.11+
-- ffmpeg on PATH
-- Deno on PATH (for yt-dlp's YouTube challenge solver)
-- [Tailscale](https://tailscale.com/) with Funnel enabled and MagicDNS + HTTPS certs
-- [YouTube Data API v3](https://console.cloud.google.com/apis/api/youtube.googleapis.com) key
-- Firefox with YouTube Premium logged in (for cookies)
-- Claude Code CLI on PATH (Max subscription)
-- NVIDIA GPU (optional, for CUDA-accelerated Whisper — requires `nvidia-cublas-cu12` and `nvidia-cudnn-cu12`)
-
-### Install
-
-```bash
-git clone https://github.com/cwilliams5/Siphon.git
-cd Siphon
-pip install -e .
-
-# For CUDA Whisper acceleration (optional):
-pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
-```
-
-### Configure
-
-Copy `config.example.yaml` to your data directory (outside the repo — keep secrets out of git):
-
-```bash
-mkdir /path/to/siphon-data
-cp config.example.yaml /path/to/siphon-data/config.yaml
-```
-
-Edit the config with your Tailscale hostname, auth credentials, YouTube API key, and feed list.
-
-### Run
-
-```bash
-python -m siphon -c "/path/to/siphon-data/config.yaml"
-```
-
-Or create a batch file for windowless operation (Windows):
-
-```batch
-@echo off
-set PATH=%PATH%;C:\Users\you\.deno\bin
-cd /d "path\to\Siphon"
-pythonw -m siphon -c "path\to\siphon-data\config.yaml"
-```
-
-Use `--verbose` flag for console output. Use `--no-tray` to disable the system tray icon.
-
-### Tailscale Funnel
-
-```bash
-tailscale funnel --bg 8585
-```
-
-RSS feeds are served over HTTPS with Basic Auth. Media files are served over Tailnet only (no auth, requires Tailscale on your phone).
-
-### Pocket Casts
-
-1. Copy the RSS URL from the web UI (includes embedded auth credentials)
-2. Submit at [pocketcasts.com/submit](https://pocketcasts.com/submit) as a private feed
-3. Save the `pca.st/private/...` URL back in the feed's settings
-
-## Web UI
-
-Available at `http://localhost:8585/ui/` (localhost only, no auth). Three themes: Light, Dark, Black. SPA-like navigation via htmx.
-
-- **Dashboard** with system stats, lifetime metrics, and insights (most stale feeds, disk hogs, longest processing, cut stats)
-- **Feed management** — add/edit/delete feeds with all per-feed config options, type-aware forms (YouTube vs podcast)
-- **OPML import** for bulk podcast migration from Pocket Casts or other apps
-- **Live activity log** in sticky footer with queue status, worker activity, and timing
-- **Sort & filter** — by name, latest, most cuts; filter by YouTube, Podcast, LLM, SponsorBlock
-- **Search** — instant feed search from the header
-- **Per-feed stats** — In RSS count, queue depths, SB/LLM cut totals
-- **Mark as Caught Up** — trims to 1 episode, sets date cutoff, cleans disk
-
-## System Tray
-
-- **Pause/Resume** — three-state (Running / Pending Pause / Paused) with graceful drain
-- **Whisper workers** — adjustable (1-5, for live system use vs overnight processing)
-- **Test YouTube Login** — verify Firefox cookie status
-- **Open Config** — launch web UI
-
-## Key config options
-
-| Section | Key | Default | Description |
-|---------|-----|---------|-------------|
-| `youtube` | `api_key` | required | YouTube Data API v3 key |
-| `youtube` | `quota_cooldown_hours` | `4` | Hours to pause after API 403 |
-| `youtube` | `country` | `US` | ISO country code for filtering region-blocked videos |
-| `server` | `timezone` | `America/Los_Angeles` | Timezone for activity log timestamps |
-| `server` | `media_base_url` | `""` | Tailnet-internal URL for media files |
-| `schedule` | `check_interval_minutes` | `30` | How often to check for new episodes |
-| `schedule` | `youtube_max_downloads_per_hour` | `10` | YouTube download rate limit |
-| `schedule` | `podcast_max_downloads_per_hour` | `120` | Podcast download rate limit |
-| `defaults` | `sponsorblock_delay_minutes` | `1440` | Wait for SB segments to be crowdsourced |
-| `defaults` | `llm_trim` | `false` | Enable Whisper + Claude ad detection |
-| `llm` | `whisper_model` | `base` | Whisper model size (tiny/base/small/medium/large) |
-| `llm` | `whisper_device` | `cpu` | Whisper device (`cpu` or `cuda`) |
-| `llm` | `whisper_workers` | `1` | Concurrent Whisper workers (CPU only, CUDA forced to 1) |
-| `llm` | `claude_concurrency` | `3` | Parallel Claude CLI invocations |
-| `llm` | `claude_model` | `claude-sonnet-4-6` | Claude model for ad detection |
-| `llm` | `claude_effort` | `medium` | Claude thinking depth (low/medium/high/max) |
-| `llm` | `word_timestamps_max_minutes` | `45` | Max episode length for word-level timestamps |
-| `llm` | `confidence_threshold` | `0.75` | Minimum confidence to cut a detected segment |
-| `storage` | `max_disk_gb` | `1000` | Auto-prune oldest episodes when exceeded |
-
-### Per-feed overrides
-
-Every feed can override the defaults above. Set these in `config.yaml` under each feed entry, or edit them in the web UI.
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `sponsorblock` | `true` | Enable/disable SponsorBlock segment removal (YouTube only) |
-| `sponsorblock_delay_minutes` | `1440` | Wait time after publish for SB segments to be crowdsourced |
-| `llm_trim` | `false` | Enable Whisper + Claude ad detection for this feed |
-| `quality` | `1440` | YouTube video quality (`1440`, `1080`, or `max`) |
-| `block_shorts` | `true` | Filter out YouTube Shorts (< 60s) |
-| `min_duration_seconds` | `0` | Skip episodes shorter than this |
-| `date_cutoff` | none | Ignore episodes published before this date (YYYYMMDD) |
-| `title_exclude` | `[]` | Skip episodes whose title contains any of these strings |
-| `claude_prompt_extra` | none | Append additional instructions to the default Claude ad-detection prompt |
-| `claude_prompt_override` | none | Replace the default prompt entirely with a custom one |
-
-`claude_prompt_extra` is useful for feed-specific tuning — e.g. *"This is an interview podcast, a guest discussing their work is not an ad."*. `claude_prompt_override` replaces the entire prompt, giving full control over what Claude looks for.
-
-See `config.example.yaml` for the full schema.
-
 ## Metrics & observability
 
 Per-episode metrics tracked in SQLite:
 - `whisper_duration_seconds`, `claude_duration_seconds`, `ffmpeg_duration_seconds`
 - `whisper_word_count`, `whisper_segment_count`, `transcript_size_bytes`
 - `whisper_model`, `whisper_device` (CPU vs CUDA comparison)
-- `llm_cuts_applied`, `sb_cuts_applied`
+- `llm_cuts_applied`, `sb_cuts_applied`, `sb_seconds_removed`
 - `filter_reason` (too_old, too_short, short, title_match)
 
-Dashboard insights computed from these metrics: most stale feeds, disk usage by feed, longest processing episodes, highest cut rates, highest filter rates.
+Dashboard insights computed from these metrics: time saved, most stale feeds, disk usage by feed, longest processing episodes, highest cut rates, highest filter rates, most active feeds, queue backlog, feed errors.
