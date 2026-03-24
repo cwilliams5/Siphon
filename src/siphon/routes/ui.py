@@ -310,7 +310,7 @@ async def stats_page(request: Request):
         "SELECT "
         "  COALESCE(SUM(llm_cuts_applied), 0) AS total_llm_cuts, "
         "  COALESCE(SUM(sb_cuts_applied), 0) AS total_sb_cuts "
-        "FROM episodes WHERE status = 'done'"
+        "FROM episodes WHERE status IN ('done', 'pruned')"
     ).fetchone()
     total_llm_cuts = int(agg["total_llm_cuts"])
     total_sb_cuts = int(agg["total_sb_cuts"])
@@ -445,7 +445,7 @@ def _compute_insights(db: Database, config) -> dict:
     # Most stale feeds (oldest latest episode)
     stale_rows = db.conn.execute(
         "SELECT feed_name, MAX(upload_date) as latest_date "
-        "FROM episodes WHERE status = 'done' "
+        "FROM episodes WHERE status IN ('done', 'pruned') "
         "GROUP BY feed_name "
         "ORDER BY latest_date ASC "
         "LIMIT 3"
@@ -504,7 +504,7 @@ def _compute_insights(db: Database, config) -> dict:
     sb_rows = db.conn.execute(
         "SELECT feed_name, AVG(sb_cuts_applied) as avg_sb, COUNT(*) as ep_count "
         "FROM episodes "
-        "WHERE status = 'done' AND sb_cuts_applied IS NOT NULL AND sb_cuts_applied > 0 "
+        "WHERE status IN ('done', 'pruned') AND sb_cuts_applied IS NOT NULL AND sb_cuts_applied > 0 "
         "GROUP BY feed_name "
         "ORDER BY avg_sb DESC "
         "LIMIT 3"
@@ -521,7 +521,7 @@ def _compute_insights(db: Database, config) -> dict:
     llm_rows = db.conn.execute(
         "SELECT feed_name, AVG(llm_cuts_applied) as avg_llm, COUNT(*) as ep_count "
         "FROM episodes "
-        "WHERE status = 'done' AND llm_cuts_applied IS NOT NULL AND llm_cuts_applied > 0 "
+        "WHERE status IN ('done', 'pruned') AND llm_cuts_applied IS NOT NULL AND llm_cuts_applied > 0 "
         "GROUP BY feed_name "
         "ORDER BY avg_llm DESC "
         "LIMIT 3"
