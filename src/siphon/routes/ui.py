@@ -206,6 +206,7 @@ def _get_feed_display(request: Request) -> list[dict]:
             "crap_filtered": crap_filtered,
             "source_count": source_count,
             "latest_episode_date": latest_episode_date,
+            "latest_episode_raw": latest_done_date or "",
         })
 
     return feeds_display

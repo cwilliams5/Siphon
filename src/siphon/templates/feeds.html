@@ -20,7 +20,7 @@
 
 <div id="feed-list">
 {% for feed in feeds %}
-<div class="card feed-card" style="animation-delay:{{ loop.index0 * 30 }}ms;" data-feed-type="{{ feed.feed_type }}" data-feed-name="{{ (feed.display_name or feed.name)|lower }}" data-llm="{{ feed.llm_trim }}" data-sb="{{ feed.sponsorblock }}" data-cuts="{{ feed.llm_cuts_total + feed.sb_cuts_total }}" data-last-checked="{{ feed.last_checked_at or '' }}">
+<div class="card feed-card" style="animation-delay:{{ loop.index0 * 30 }}ms;" data-feed-type="{{ feed.feed_type }}" data-feed-name="{{ (feed.display_name or feed.name)|lower }}" data-llm="{{ feed.llm_trim }}" data-sb="{{ feed.sponsorblock }}" data-cuts="{{ feed.llm_cuts_total + feed.sb_cuts_total }}" data-latest="{{ feed.latest_episode_raw }}">
   <div class="feed-card-layout">
     <div class="feed-artwork">
       {% if feed.image_url %}
@@ -220,8 +220,8 @@ function sortFeeds(by) {
   cards.sort(function(a, b) {
     if (by === 'name') return a.dataset.feedName.localeCompare(b.dataset.feedName);
     if (by === 'cuts') return parseInt(b.dataset.cuts) - parseInt(a.dataset.cuts);
-    if (by === 'latest') return (b.dataset.lastChecked || '').localeCompare(a.dataset.lastChecked || '');
-    if (by === 'oldest') return (a.dataset.lastChecked || '').localeCompare(b.dataset.lastChecked || '');
+    if (by === 'latest') return (b.dataset.latest || '').localeCompare(a.dataset.latest || '');
+    if (by === 'oldest') return (a.dataset.latest || '').localeCompare(b.dataset.latest || '');
     return 0;
   });
   cards.forEach(function(c) { container.appendChild(c); });
