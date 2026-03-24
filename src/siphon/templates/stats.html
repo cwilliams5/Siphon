@@ -126,6 +126,11 @@
   </div>
 </div>
 <div class="status-bar" style="margin-bottom:20px;">
+  <div class="stat stat-lifetime" title="Total data downloaded and processed across all episodes (including pruned)">
+    <i data-lucide="download" class="stat-watermark"></i>
+    <div class="stat-value">{{ total_data_display }}</div>
+    <div class="stat-label">Total Data</div>
+  </div>
   <div class="stat stat-lifetime" title="Total words transcribed by Whisper across all episodes">
     <i data-lucide="message-square" class="stat-watermark"></i>
     <div class="stat-value">{{ total_words | commafy }}</div>
@@ -135,11 +140,6 @@
     <i data-lucide="clock" class="stat-watermark"></i>
     <div class="stat-value">{{ avg_processing_display }}</div>
     <div class="stat-label">Avg Process</div>
-  </div>
-  <div class="stat stat-lifetime" title="Total data downloaded and processed across all episodes (including pruned)">
-    <i data-lucide="download" class="stat-watermark"></i>
-    <div class="stat-value">{{ total_data_display }}</div>
-    <div class="stat-label">Total Data</div>
   </div>
   <div class="stat stat-lifetime" title="Episodes downloaded and processed, then cleaned via Mark Caught Up">
     <i data-lucide="archive" class="stat-watermark"></i>
