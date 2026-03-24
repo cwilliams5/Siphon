@@ -116,6 +116,14 @@ RSS feeds are served over HTTPS with Basic Auth. Media files are served over Tai
 2. Submit at [pocketcasts.com/submit](https://pocketcasts.com/submit) as a private feed
 3. Save the `pca.st/private/...` URL back in the feed's settings
 
+### Tests
+
+380+ tests covering config, DB, pipeline, filters, feed generation, ad detection, SponsorBlock, YouTube API, UI routes, and htmx integration.
+
+```bash
+python -m pytest tests/
+```
+
 ## Key config options
 
 | Section | Key | Default | Description |
