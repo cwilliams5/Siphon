@@ -104,7 +104,9 @@ def _get_feed_display(request: Request) -> list[dict]:
         in_rss = 0
         whisper_pending = 0
         claude_pending = 0
-        queued = 0
+        sb_waiting = 0
+        dl_ready = 0
+        dl_active = 0
         sb_cuts_total = 0
         llm_cuts_total = 0
         disk_bytes = 0
@@ -125,8 +127,12 @@ def _get_feed_display(request: Request) -> list[dict]:
                 whisper_pending += 1
             if s == "pending_claude":
                 claude_pending += 1
-            if s in ("pending", "eligible", "downloading"):
-                queued += 1
+            if s == "pending":
+                sb_waiting += 1
+            if s == "eligible":
+                dl_ready += 1
+            if s == "downloading":
+                dl_active += 1
             sb_cuts_total += ep.get("sb_cuts_applied") or 0
             llm_cuts_total += ep.get("llm_cuts_applied") or 0
             # Disk usage: sum file_size for non-pruned, non-filtered episodes
@@ -228,7 +234,9 @@ def _get_feed_display(request: Request) -> list[dict]:
             "in_rss": in_rss,
             "whisper_pending": whisper_pending,
             "claude_pending": claude_pending,
-            "queued": queued,
+            "sb_waiting": sb_waiting,
+            "dl_ready": dl_ready,
+            "dl_active": dl_active,
             "sb_cuts_total": sb_cuts_total,
             "llm_cuts_total": llm_cuts_total,
             "disk_usage_mb": disk_usage_mb,

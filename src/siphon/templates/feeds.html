@@ -73,10 +73,11 @@
         {% if feed.time_saved_display %}<span class="stat-chip">{{ feed.time_saved_display }}</span>{% endif %}
         {% if feed.latest_episode_date %}<span class="stat-chip">Latest: {{ feed.latest_episode_date }}</span>{% endif %}
       </div>
-      {% if feed.queued or feed.whisper_pending or feed.claude_pending %}
+      {% set has_queue = feed.sb_waiting or feed.dl_ready or feed.dl_active or feed.whisper_pending or feed.claude_pending %}
+      {% if has_queue %}
       <div class="feed-queue">
         <span class="queue-dot"></span>
-        Queue:{% if feed.queued %} {{ feed.queued }} downloading{% endif %}{% if feed.whisper_pending %}{% if feed.queued %} |{% endif %} {{ feed.whisper_pending }} whisper{% endif %}{% if feed.claude_pending %}{% if feed.queued or feed.whisper_pending %} |{% endif %} {{ feed.claude_pending }} claude{% endif %}
+        Queue:{% set parts = [] %}{% if feed.sb_waiting %}{% set _ = parts.append(feed.sb_waiting ~ ' SB wait') %}{% endif %}{% if feed.dl_ready %}{% set _ = parts.append(feed.dl_ready ~ ' ready') %}{% endif %}{% if feed.dl_active %}{% set _ = parts.append(feed.dl_active ~ ' downloading') %}{% endif %}{% if feed.whisper_pending %}{% set _ = parts.append(feed.whisper_pending ~ ' whisper') %}{% endif %}{% if feed.claude_pending %}{% set _ = parts.append(feed.claude_pending ~ ' claude') %}{% endif %} {{ parts | join(' | ') }}
       </div>
       {% endif %}
     </div>
