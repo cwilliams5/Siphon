@@ -531,20 +531,21 @@ async def _download_youtube_episode(episode, resolved, config, db) -> None:
             db.update_episode_status(video_id, feed_name, "filtered", filter_reason=filter_reason, duration=duration)
             return
 
-        # Query SponsorBlock for segment count if enabled
-        sb_cuts: int | None = None
+        # Query SponsorBlock for segment info if enabled
+        sb_kwargs: dict = {}
         if resolved.sponsorblock:
-            from siphon.sponsorblock import get_segment_count
-            sb_cuts = await loop.run_in_executor(
-                None, get_segment_count, video_id, resolved.sponsorblock_categories,
+            from siphon.sponsorblock import get_segment_info
+            sb_cuts, sb_secs = await loop.run_in_executor(
+                None, get_segment_info, video_id, resolved.sponsorblock_categories,
             )
-            logger.info("SponsorBlock segments for %s: %d", video_id, sb_cuts)
+            logger.info("SponsorBlock segments for %s: %d (%.1fs removed)", video_id, sb_cuts, sb_secs)
+            sb_kwargs = {"sb_cuts_applied": sb_cuts, "sb_seconds_removed": sb_secs}
 
         next_status = "pending_whisper" if resolved.llm_trim else "done"
         db.update_episode_status(
             video_id, feed_name, next_status,
             file_path=path, file_size=size, mime_type=mime, duration=duration,
-            **({"sb_cuts_applied": sb_cuts} if sb_cuts is not None else {}),
+            **sb_kwargs,
         )
         logger.info("Downloaded YouTube %s for feed %s → %s", video_id, feed_name, next_status)
     else:

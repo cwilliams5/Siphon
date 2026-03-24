@@ -538,6 +538,108 @@ def _compute_insights(db: Database, config) -> dict:
             "total": row["total"],
         })
 
+    # Filter breakdown — top 3 filter reasons by count (excluding date filters)
+    filter_breakdown_rows = db.conn.execute(
+        "SELECT filter_reason, COUNT(*) as cnt "
+        "FROM episodes "
+        "WHERE status = 'filtered' AND filter_reason IS NOT NULL "
+        "  AND filter_reason NOT IN ('too_old', 'unknown_date') "
+        "GROUP BY CASE "
+        "  WHEN filter_reason LIKE 'title_match:%' THEN 'title_match' "
+        "  ELSE filter_reason END "
+        "ORDER BY cnt DESC "
+        "LIMIT 3"
+    ).fetchall()
+    total_crap = sum(r["cnt"] for r in filter_breakdown_rows) if filter_breakdown_rows else 0
+    filter_breakdown = []
+    for row in filter_breakdown_rows:
+        reason = row["filter_reason"]
+        if reason.startswith("title_match:"):
+            reason = "title_match"
+        pct = round(100 * row["cnt"] / total_crap) if total_crap else 0
+        filter_breakdown.append({
+            "reason": reason,
+            "count": row["cnt"],
+            "pct": pct,
+        })
+
+    # Most active — top 3 feeds by episode count in last 7 days
+    most_active_rows = db.conn.execute(
+        "SELECT feed_name, COUNT(*) as cnt "
+        "FROM episodes "
+        "WHERE discovered_at >= datetime('now', '-7 days') "
+        "  AND status NOT IN ('filtered') "
+        "GROUP BY feed_name "
+        "ORDER BY cnt DESC "
+        "LIMIT 3"
+    ).fetchall()
+    most_active = []
+    for row in most_active_rows:
+        most_active.append({
+            "name": display_names.get(row["feed_name"], row["feed_name"]),
+            "count": row["cnt"],
+        })
+
+    # Time saved — top 3 feeds by total time removed (LLM + SB + filtered duration)
+    import json as _json
+    time_saved_per_feed: dict[str, float] = {}
+
+    # LLM time saved: sum segment durations from llm_segments_json
+    llm_time_rows = db.conn.execute(
+        "SELECT feed_name, llm_segments_json FROM episodes "
+        "WHERE llm_cuts_applied > 0 AND llm_segments_json IS NOT NULL"
+    ).fetchall()
+    for row in llm_time_rows:
+        try:
+            data = _json.loads(row["llm_segments_json"])
+            for seg in data.get("high_confidence", data.get("segments", [])):
+                if "start" in seg and "end" in seg:
+                    time_saved_per_feed[row["feed_name"]] = (
+                        time_saved_per_feed.get(row["feed_name"], 0)
+                        + seg["end"] - seg["start"]
+                    )
+        except (ValueError, TypeError, KeyError):
+            pass
+
+    # SB time saved
+    sb_time_rows = db.conn.execute(
+        "SELECT feed_name, SUM(sb_seconds_removed) as total_sb "
+        "FROM episodes WHERE sb_seconds_removed > 0 "
+        "GROUP BY feed_name"
+    ).fetchall()
+    for row in sb_time_rows:
+        time_saved_per_feed[row["feed_name"]] = (
+            time_saved_per_feed.get(row["feed_name"], 0)
+            + (row["total_sb"] or 0)
+        )
+
+    # Filtered episode duration saved
+    filtered_time_rows = db.conn.execute(
+        "SELECT feed_name, SUM(duration) as total_dur "
+        "FROM episodes WHERE status = 'filtered' AND duration IS NOT NULL "
+        "  AND filter_reason NOT IN ('too_old', 'unknown_date') "
+        "GROUP BY feed_name"
+    ).fetchall()
+    for row in filtered_time_rows:
+        time_saved_per_feed[row["feed_name"]] = (
+            time_saved_per_feed.get(row["feed_name"], 0)
+            + (row["total_dur"] or 0)
+        )
+
+    # Sort and take top 3
+    time_saved_sorted = sorted(time_saved_per_feed.items(), key=lambda x: x[1], reverse=True)[:3]
+    time_saved = []
+    for feed_name, secs in time_saved_sorted:
+        mins = int(secs) // 60
+        if mins >= 60:
+            display = f"{mins // 60}h {mins % 60}m"
+        else:
+            display = f"{mins}m"
+        time_saved.append({
+            "name": display_names.get(feed_name, feed_name),
+            "display": display,
+        })
+
     return {
         "stale": stale,
         "disk_hogs": disk_hogs,
@@ -545,6 +647,9 @@ def _compute_insights(db: Database, config) -> dict:
         "most_sb": most_sb,
         "most_llm": most_llm,
         "highest_filter": highest_filter,
+        "filter_breakdown": filter_breakdown,
+        "most_active": most_active,
+        "time_saved": time_saved,
     }
 
 

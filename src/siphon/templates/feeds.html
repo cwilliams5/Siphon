@@ -171,7 +171,7 @@ async function testCookies() {
 testCookies();
 </script>
 
-{% if insights.stale or insights.disk_hogs or insights.longest_proc or insights.most_sb or insights.most_llm or insights.highest_filter %}
+{% if insights.stale or insights.disk_hogs or insights.longest_proc or insights.most_sb or insights.most_llm or insights.highest_filter or insights.filter_breakdown or insights.most_active or insights.time_saved %}
 <details open data-persist="insights" style="margin-bottom:16px;">
   <summary style="cursor:pointer; color:var(--text-secondary); font-size:1.1em; margin-bottom:8px;">Insights</summary>
   <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:12px; align-items:stretch;">
@@ -220,6 +220,30 @@ testCookies();
       <div class="insight-title"><i data-lucide="filter" style="width:14px;height:14px;"></i> Highest Filter Rate</div>
       {% for item in insights.highest_filter %}
       <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.pct }}% ({{ item.filtered }}/{{ item.total }})</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if insights.filter_breakdown %}
+    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--error);">
+      <div class="insight-title"><i data-lucide="trash-2" style="width:14px;height:14px;"></i> Filter Breakdown</div>
+      {% for item in insights.filter_breakdown %}
+      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.reason }} &mdash; {{ item.count | commafy }} ({{ item.pct }}%)</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if insights.most_active %}
+    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--success);">
+      <div class="insight-title"><i data-lucide="activity" style="width:14px;height:14px;"></i> Most Active (7d)</div>
+      {% for item in insights.most_active %}
+      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.count }} eps</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if insights.time_saved %}
+    <div class="card insight-card" style="padding:12px; border-left:3px solid var(--accent);">
+      <div class="insight-title"><i data-lucide="clock" style="width:14px;height:14px;"></i> Time Saved</div>
+      {% for item in insights.time_saved %}
+      <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.display }}</div>
       {% endfor %}
     </div>
     {% endif %}

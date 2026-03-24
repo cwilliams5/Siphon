@@ -84,6 +84,8 @@ MIGRATIONS = [
     "ALTER TABLE episodes ADD COLUMN whisper_segment_count INTEGER",
     "ALTER TABLE episodes ADD COLUMN transcript_size_bytes INTEGER",
     "ALTER TABLE episodes ADD COLUMN whisper_model TEXT",
+    # SponsorBlock seconds removed (total duration of all SB segments)
+    "ALTER TABLE episodes ADD COLUMN sb_seconds_removed REAL",
 ]
 
 
@@ -301,7 +303,7 @@ class Database:
             """SELECT e.*, f.feed_type FROM episodes e
                JOIN feeds f ON e.feed_name = f.name
                WHERE e.status = 'pending_whisper'
-               ORDER BY e.discovered_at ASC
+               ORDER BY e.discovered_at DESC
                LIMIT ?""",
             (limit,),
         ).fetchall()
