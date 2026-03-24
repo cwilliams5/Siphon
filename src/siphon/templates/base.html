@@ -403,10 +403,7 @@
     <div style="position:relative; display:inline-flex; align-items:center;">
       <i data-lucide="search" style="width:14px;height:14px; position:absolute; left:8px; color:var(--text-muted); pointer-events:none;"></i>
       <input type="text" id="feed-search" class="nav-search" placeholder="Search feeds..." title="Search feeds by name" style="padding-left:28px;"
-             hx-get="/ui/feeds" hx-target="#main-content" hx-push-url="true"
-             hx-trigger="input changed delay:300ms, keyup[key=='Enter']"
-             hx-include="this" name="q"
-             onkeydown="if(event.key==='Escape'){this.value='';htmx.trigger(this,'input');}">
+             oninput="siphonSearch()" onkeydown="if(event.key==='Escape'){this.value='';siphonSearch();}">
     </div>
     <button class="btn btn-small" title="Check all feeds for new episodes"
             hx-post="/ui/check-now" hx-swap="none">
@@ -444,6 +441,33 @@
   </div>
 
   <script>
+    /* Search — client-side on feeds page, navigates to feeds from other pages */
+    var _searchTimer = null;
+    function siphonSearch() {
+      clearTimeout(_searchTimer);
+      _searchTimer = setTimeout(function() {
+        var q = document.getElementById('feed-search').value.toLowerCase();
+        var feedList = document.getElementById('feed-list');
+        if (feedList) {
+          /* Already on feeds page — filter client-side */
+          feedList.querySelectorAll('.card').forEach(function(card) {
+            card.style.display = (!q || card.dataset.feedName.includes(q)) ? '' : 'none';
+          });
+        } else {
+          /* On another page — navigate to feeds */
+          var url = '/ui/feeds' + (q ? '?q=' + encodeURIComponent(q) : '');
+          htmx.ajax('GET', url, {target: '#main-content', swap: 'innerHTML'}).then(function() {
+            history.pushState({}, '', url);
+            /* Update nav active state */
+            document.querySelectorAll('.nav a[hx-get]').forEach(function(a) {
+              a.classList.toggle('active', a.getAttribute('hx-get') === '/ui/feeds');
+            });
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+          });
+        }
+      }, 150);
+    }
+
     /* Theme management */
     function setTheme(theme) {
       document.documentElement.dataset.theme = theme;

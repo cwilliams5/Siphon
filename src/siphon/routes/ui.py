@@ -1037,10 +1037,15 @@ def _do_rename(request, config, db, feed_name, new_name):
             config.feeds[i] = FeedConfig(**data)
             break
 
-    # Update DB — delete old, insert new
+    # Update DB — rename feed in place
     old_feed = db.get_feed(feed_name)
     if old_feed:
         db.upsert_feed(new_name, old_feed["url"], old_feed.get("feed_type", "youtube"))
+        # Copy metadata that upsert doesn't carry over
+        db.conn.execute(
+            "UPDATE feeds SET image_url = ?, channel_id = ?, last_checked_at = ? WHERE name = ?",
+            (old_feed.get("image_url"), old_feed.get("channel_id"), old_feed.get("last_checked_at"), new_name),
+        )
         # Update episodes to point to new feed name
         db.conn.execute(
             "UPDATE episodes SET feed_name = ? WHERE feed_name = ?",

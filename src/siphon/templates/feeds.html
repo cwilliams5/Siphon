@@ -179,8 +179,8 @@
       <form hx-post="/ui/feed-action" hx-target="#main-content" style="display:flex; gap:8px; align-items:center;">
         <input type="hidden" name="feed_name" value="{{ feed.name }}">
         <input type="hidden" name="action" value="rename">
-        <input type="text" name="new_name" placeholder="New name" style="width:150px;" class="btn-small">
-        <button type="submit" class="btn btn-secondary btn-small"><i data-lucide="edit-3" style="width:14px;height:14px;"></i> Rename</button>
+        <input type="text" name="new_name" placeholder="New URL slug" style="width:150px;" class="btn-small">
+        <button type="submit" class="btn btn-secondary btn-small"><i data-lucide="edit-3" style="width:14px;height:14px;"></i> Rename Slug</button>
       </form>
       <button class="btn btn-danger btn-small"
               hx-post="/ui/feed-action" hx-target="#main-content"
@@ -268,10 +268,16 @@ function searchFeeds() {
   var filterParam = params.get('filter');
   if (filterParam) filterFeeds(filterParam);
   else filterFeeds('all');
-  var searchParam = params.get('q');
-  if (searchParam) {
-    var searchBox = document.getElementById('feed-search');
-    if (searchBox) { searchBox.value = searchParam; searchFeeds(); }
+  /* Apply search from current search box (persistent nav) or URL param on full load */
+  var searchBox = document.getElementById('feed-search');
+  if (searchBox && searchBox.value) {
+    searchFeeds();
+  } else {
+    var searchParam = params.get('q');
+    if (searchParam && searchBox) {
+      searchBox.value = searchParam;
+      searchFeeds();
+    }
   }
 })();
 
