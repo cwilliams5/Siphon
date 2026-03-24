@@ -13,6 +13,10 @@ Built for a very specific stack: **Youtube API key, Tailscale Funnel, Pocket Cas
 <td width="50%"><a href="img/dashboard.png"><img src="img/dashboard.png" alt="Dashboard"></a></td>
 <td width="50%"><a href="img/feeds.png"><img src="img/feeds.png" alt="Feeds"></a></td>
 </tr>
+<tr>
+<td align="center"><sub>Dashboard</sub></td>
+<td align="center"><sub>Feeds</sub></td>
+</tr>
 </table>
 
 ## What it does
