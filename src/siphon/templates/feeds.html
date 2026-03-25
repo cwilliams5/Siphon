@@ -12,17 +12,19 @@
   <button class="btn btn-small btn-secondary sort-btn" data-sort="sb-cuts" onclick="toggleSort('sb-cuts')">SB Cuts</button>
   <button class="btn btn-small btn-secondary sort-btn" data-sort="size" onclick="toggleSort('size')">Size</button>
   <button class="btn btn-small btn-secondary sort-btn" data-sort="time-saved" onclick="toggleSort('time-saved')">Time Saved</button>
+  <button class="btn btn-small btn-secondary sort-btn" data-sort="count" onclick="toggleSort('count')">Count</button>
   <span style="color:var(--text-secondary); font-size:0.85em; line-height:28px; margin-left:12px;">Filter:</span>
   <button class="btn btn-small btn-secondary filter-btn" data-filter="all" onclick="filterFeeds('all')">All</button>
   <button class="btn btn-small btn-secondary filter-btn" data-filter="youtube" onclick="filterFeeds('youtube')">YouTube</button>
   <button class="btn btn-small btn-secondary filter-btn" data-filter="podcast" onclick="filterFeeds('podcast')">Podcast</button>
   <button class="btn btn-small btn-secondary filter-btn" data-filter="llm" onclick="filterFeeds('llm')">LLM</button>
   <button class="btn btn-small btn-secondary filter-btn" data-filter="sb" onclick="filterFeeds('sb')">SB</button>
+  <button class="btn btn-small btn-secondary filter-btn" data-filter="pc" onclick="filterFeeds('pc')">PC</button>
 </div>
 
 <div id="feed-list">
 {% for feed in feeds %}
-<div class="card feed-card" style="animation-delay:{{ loop.index0 * 30 }}ms;" data-feed-type="{{ feed.feed_type }}" data-feed-name="{{ (feed.display_name or feed.name)|lower }}" data-llm="{{ feed.llm_trim }}" data-sb="{{ 'True' if feed.sponsorblock and feed.feed_type == 'youtube' else 'False' }}" data-llm-cuts="{{ feed.llm_cuts_total }}" data-sb-cuts="{{ feed.sb_cuts_total }}" data-disk="{{ feed.disk_usage_mb }}" data-latest="{{ feed.latest_episode_raw }}" data-time-saved="{{ feed.time_saved_secs }}">
+<div class="card feed-card" style="animation-delay:{{ loop.index0 * 30 }}ms;" data-feed-type="{{ feed.feed_type }}" data-feed-name="{{ (feed.display_name or feed.name)|lower }}" data-llm="{{ feed.llm_trim }}" data-sb="{{ 'True' if feed.sponsorblock and feed.feed_type == 'youtube' else 'False' }}" data-llm-cuts="{{ feed.llm_cuts_total }}" data-sb-cuts="{{ feed.sb_cuts_total }}" data-disk="{{ feed.disk_usage_mb }}" data-latest="{{ feed.latest_episode_raw }}" data-time-saved="{{ feed.time_saved_secs }}" data-count="{{ feed.in_rss }}" data-pc="{{ 'True' if feed.pc_url else 'False' }}">
   <div class="feed-card-layout">
     <div class="feed-artwork">
       {% if feed.image_url %}
@@ -59,7 +61,7 @@
         </div>
       </div>
       <div class="feed-meta">
-        <span class="feed-url">{{ feed.url }}</span>
+        <a href="{{ feed.url }}" target="_blank" title="Open source feed" style="color:var(--text-muted); margin-right:4px;"><i data-lucide="external-link" style="width:12px;height:12px;"></i></a><span class="feed-url">{{ feed.url }}</span>
         {% if feed.checked_relative %}<span> &mdash; Checked {{ feed.checked_relative }}</span>{% endif %}
         {% if feed.last_error %}<span class="feed-error"> &mdash; Error: {{ feed.last_error }}</span>{% endif %}
       </div>
@@ -248,6 +250,7 @@ function applySort() {
     else if (by === 'sb-cuts') result = parseInt(a.dataset.sbCuts) - parseInt(b.dataset.sbCuts);
     else if (by === 'size') result = parseFloat(a.dataset.disk) - parseFloat(b.dataset.disk);
     else if (by === 'time-saved') result = parseInt(a.dataset.timeSaved) - parseInt(b.dataset.timeSaved);
+    else if (by === 'count') result = parseInt(a.dataset.count) - parseInt(b.dataset.count);
     return result * dir;
   });
   cards.forEach(function(c) { container.appendChild(c); });
@@ -269,6 +272,7 @@ function filterFeeds(type) {
     else if (type === 'podcast') card.style.display = card.dataset.feedType === 'podcast' ? '' : 'none';
     else if (type === 'llm') card.style.display = card.dataset.llm === 'True' ? '' : 'none';
     else if (type === 'sb') card.style.display = card.dataset.sb === 'True' ? '' : 'none';
+    else if (type === 'pc') card.style.display = card.dataset.pc === 'True' ? '' : 'none';
   });
   document.querySelectorAll('.filter-btn').forEach(function(btn) {
     btn.classList.toggle('btn-filter-active', btn.dataset.filter === type);
