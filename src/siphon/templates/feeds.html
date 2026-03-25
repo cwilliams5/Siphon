@@ -13,13 +13,13 @@
   <button class="btn btn-small btn-secondary sort-btn" data-sort="size" onclick="toggleSort('size')">Size</button>
   <button class="btn btn-small btn-secondary sort-btn" data-sort="time-saved" onclick="toggleSort('time-saved')">Time Saved</button>
   <button class="btn btn-small btn-secondary sort-btn" data-sort="count" onclick="toggleSort('count')">Count</button>
-  <span style="color:var(--text-secondary); font-size:0.85em; line-height:28px; margin-left:12px;">Filter:</span>
-  <button class="btn btn-small btn-secondary filter-btn" data-filter="all" onclick="filterFeeds('all')">All</button>
-  <button class="btn btn-small btn-secondary filter-btn" data-filter="youtube" onclick="filterFeeds('youtube')">YouTube</button>
-  <button class="btn btn-small btn-secondary filter-btn" data-filter="podcast" onclick="filterFeeds('podcast')">Podcast</button>
-  <button class="btn btn-small btn-secondary filter-btn" data-filter="llm" onclick="filterFeeds('llm')">LLM</button>
-  <button class="btn btn-small btn-secondary filter-btn" data-filter="sb" onclick="filterFeeds('sb')">SB</button>
-  <button class="btn btn-small btn-secondary filter-btn" data-filter="pc" onclick="filterFeeds('pc')">PC</button>
+  <div style="flex:1;"></div>
+  <span style="color:var(--text-secondary); font-size:0.85em; line-height:28px;">Filter:</span>
+  <button class="btn btn-small btn-secondary filter-btn" data-filter="youtube" onclick="toggleFilter('youtube')">YouTube</button>
+  <button class="btn btn-small btn-secondary filter-btn" data-filter="podcast" onclick="toggleFilter('podcast')">Podcast</button>
+  <button class="btn btn-small btn-secondary filter-btn" data-filter="llm" onclick="toggleFilter('llm')">LLM</button>
+  <button class="btn btn-small btn-secondary filter-btn" data-filter="sb" onclick="toggleFilter('sb')">SB</button>
+  <button class="btn btn-small btn-secondary filter-btn" data-filter="pc" onclick="toggleFilter('pc')">PC</button>
 </div>
 
 <div id="feed-list">
@@ -265,18 +265,59 @@ function applySort() {
   });
 }
 
-function filterFeeds(type) {
+/* Filter state: null = off, 'include' = match, 'exclude' = negate */
+var filterStates = {};
+
+function getFilterMatch(filter, card) {
+  if (filter === 'youtube') return card.dataset.feedType === 'youtube';
+  if (filter === 'podcast') return card.dataset.feedType === 'podcast';
+  if (filter === 'llm') return card.dataset.llm === 'True';
+  if (filter === 'sb') return card.dataset.sb === 'True';
+  if (filter === 'pc') return card.dataset.pc === 'True';
+  return true;
+}
+
+function toggleFilter(type) {
+  var current = filterStates[type] || null;
+  if (current === null) filterStates[type] = 'include';
+  else if (current === 'include') filterStates[type] = 'exclude';
+  else filterStates[type] = null;
+  applyFilters();
+}
+
+function applyFilters() {
+  /* Get active filters */
+  var active = [];
+  for (var key in filterStates) {
+    if (filterStates[key]) active.push({filter: key, mode: filterStates[key]});
+  }
+
   document.querySelectorAll('#feed-list .card').forEach(function(card) {
-    if (type === 'all') card.style.display = '';
-    else if (type === 'youtube') card.style.display = card.dataset.feedType === 'youtube' ? '' : 'none';
-    else if (type === 'podcast') card.style.display = card.dataset.feedType === 'podcast' ? '' : 'none';
-    else if (type === 'llm') card.style.display = card.dataset.llm === 'True' ? '' : 'none';
-    else if (type === 'sb') card.style.display = card.dataset.sb === 'True' ? '' : 'none';
-    else if (type === 'pc') card.style.display = card.dataset.pc === 'True' ? '' : 'none';
+    if (active.length === 0) { card.style.display = ''; return; }
+    var show = true;
+    for (var i = 0; i < active.length; i++) {
+      var match = getFilterMatch(active[i].filter, card);
+      if (active[i].mode === 'include' && !match) show = false;
+      if (active[i].mode === 'exclude' && match) show = false;
+    }
+    card.style.display = show ? '' : 'none';
   });
+
+  /* Update button styles */
   document.querySelectorAll('.filter-btn').forEach(function(btn) {
-    btn.classList.toggle('btn-filter-active', btn.dataset.filter === type);
-    btn.classList.toggle('btn-secondary', btn.dataset.filter !== type);
+    var state = filterStates[btn.dataset.filter] || null;
+    var label = btn.textContent.replace(/\s*[\u2713\u2717]$/, '');
+    btn.classList.remove('btn-filter-active', 'btn-secondary', 'btn-filter-exclude');
+    if (state === 'include') {
+      btn.classList.add('btn-filter-active');
+      btn.textContent = label + ' \u2713';
+    } else if (state === 'exclude') {
+      btn.classList.add('btn-filter-exclude');
+      btn.textContent = label + ' \u2717';
+    } else {
+      btn.classList.add('btn-secondary');
+      btn.textContent = label;
+    }
   });
 }
 
@@ -303,8 +344,10 @@ function searchFeeds() {
   }
   var params = new URLSearchParams(window.location.search);
   var filterParam = params.get('filter');
-  if (filterParam) filterFeeds(filterParam);
-  else filterFeeds('all');
+  if (filterParam) {
+    filterStates[filterParam] = 'include';
+    applyFilters();
+  }
   /* Apply search from current search box (persistent nav) or URL param on full load */
   var searchBox = document.getElementById('feed-search');
   if (searchBox && searchBox.value) {
