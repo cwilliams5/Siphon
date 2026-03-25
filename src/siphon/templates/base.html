@@ -545,6 +545,12 @@
     setInterval(fetchActivityLog, 5000);
 
     /* Update nav active state and re-init after htmx swaps */
+    /* Disable submit buttons during htmx requests */
+    document.body.addEventListener('htmx:beforeRequest', function(evt) {
+      var btn = evt.detail.elt.querySelector('.save-btn') || (evt.detail.elt.classList.contains('save-btn') ? evt.detail.elt : null);
+      if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
+    });
+
     document.body.addEventListener('htmx:afterSwap', function(evt) {
       /* Re-render Lucide icons on any swap (cards, pages) */
       if (typeof lucide !== 'undefined') lucide.createIcons();

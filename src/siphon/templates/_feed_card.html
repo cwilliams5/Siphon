@@ -29,7 +29,7 @@
           <button class="btn btn-danger btn-small"
                   hx-post="/ui/feed-action" hx-target="#card-{{ feed.name }}" hx-swap="outerHTML"
                   hx-vals='{"feed_name":"{{ feed.name }}","action":"catchup"}'
-                  hx-confirm="Mark {{ feed.name }} as caught up? This deletes all downloaded files and sets date_cutoff to today.">
+                  hx-confirm="Mark {{ feed.name }} as caught up? Keeps only the latest episode, deletes all other files, and sets date_cutoff to prevent re-downloading.">
             <i data-lucide="check-circle" style="width:14px;height:14px;"></i> Caught Up
           </button>
         </div>
@@ -152,7 +152,7 @@
         <input type="text" name="pc_url" value="{{ feed.pc_url or '' }}" placeholder="https://pca.st/..." style="width:100%;">
       </div>
       <div style="display:flex; gap:8px; margin-top:8px;">
-        <button type="submit" class="btn btn-small">Save</button>
+        <button type="submit" class="btn btn-small save-btn">Save</button>
       </div>
     </form>
 
