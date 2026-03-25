@@ -1,0 +1,174 @@
+<div id="card-{{ feed.name }}" class="card feed-card" data-feed-type="{{ feed.feed_type }}" data-feed-name="{{ (feed.display_name or feed.name)|lower }}" data-llm="{{ feed.llm_trim }}" data-sb="{{ 'True' if feed.sponsorblock and feed.feed_type == 'youtube' else 'False' }}" data-llm-cuts="{{ feed.llm_cuts_total }}" data-sb-cuts="{{ feed.sb_cuts_total }}" data-disk="{{ feed.disk_usage_mb }}" data-latest="{{ feed.latest_episode_raw }}" data-time-saved="{{ feed.time_saved_secs }}" data-count="{{ feed.in_rss }}" data-pc="{{ 'True' if feed.pc_url else 'False' }}">
+  <div class="feed-card-layout">
+    <div class="feed-artwork">
+      {% if feed.image_url %}
+      <img src="{{ feed.image_url }}" alt="">
+      {% else %}
+      {% set initial = (feed.display_name or feed.name)[0] %}
+      {% set colors = ['#c0392b','#2980b9','#8e44ad','#27ae60','#d35400','#2c3e50','#16a085','#e74c3c'] %}
+      <div class="feed-artwork-placeholder" style="background:{{ colors[(feed.name|length) % colors|length] }};">{{ initial }}</div>
+      {% endif %}
+    </div>
+    <div class="feed-content">
+      <div class="feed-header">
+        <div class="feed-title-area">
+          <strong>{{ feed.display_name or feed.name }}</strong>
+          {% if feed.display_name %}
+          <span class="feed-slug">({{ feed.name }})</span>
+          {% endif %}
+          <span class="badge {% if feed.feed_type == 'podcast' %}badge-pod{% else %}badge-yt{% endif %}">{{ feed.feed_type }}</span>
+          {% if feed.llm_trim %}<span class="badge badge-llm">LLM</span>{% endif %}
+          {% if feed.sponsorblock and feed.feed_type == 'youtube' %}<span class="badge" style="background:var(--badge-pod);color:#fff;">SB</span>{% endif %}
+        </div>
+        <div class="feed-buttons">
+          <button class="btn btn-secondary btn-small" onclick="copyRSS('{{ feed.name }}')" title="Copy RSS URL with auth"><i data-lucide="link" style="width:14px;height:14px;"></i> RSS</button>
+          {% if feed.pc_url %}
+          <a href="{{ feed.pc_url }}" class="btn btn-secondary btn-small" style="background:#f43e37;" target="_blank" title="Open in Pocket Casts"><i data-lucide="headphones" style="width:14px;height:14px;"></i> PC</a>
+          {% endif %}
+          <button class="btn btn-small" onclick="toggleEdit('{{ feed.name }}')"><i data-lucide="settings" style="width:14px;height:14px;"></i> Edit</button>
+          <button class="btn btn-danger btn-small"
+                  hx-post="/ui/feed-action" hx-target="#card-{{ feed.name }}" hx-swap="outerHTML"
+                  hx-vals='{"feed_name":"{{ feed.name }}","action":"catchup"}'
+                  hx-confirm="Mark {{ feed.name }} as caught up? This deletes all downloaded files and sets date_cutoff to today.">
+            <i data-lucide="check-circle" style="width:14px;height:14px;"></i> Caught Up
+          </button>
+        </div>
+      </div>
+      <div class="feed-meta">
+        <a href="{{ feed.url }}" target="_blank" title="Open source feed" style="color:var(--text-muted); margin-right:4px;"><i data-lucide="external-link" style="width:12px;height:12px;"></i></a><span class="feed-url">{{ feed.url }}</span>
+        {% if feed.checked_relative %}<span> &mdash; Checked {{ feed.checked_relative }}</span>{% endif %}
+        {% if feed.last_error %}<span class="feed-error"> &mdash; Error: {{ feed.last_error }}</span>{% endif %}
+      </div>
+      <div class="feed-stats">
+        <span class="stat-chip">{{ feed.in_rss | commafy }} in RSS</span>
+        {% if feed.feed_type == 'podcast' %}<span class="stat-chip">{{ feed.source_count | commafy }} source</span>{% endif %}
+        {% if feed.llm_cuts_total %}<span class="stat-chip">{{ feed.llm_cuts_total | commafy }} LLM cuts</span>{% endif %}
+        {% if feed.sb_cuts_total %}<span class="stat-chip">{{ feed.sb_cuts_total | commafy }} SB cuts</span>{% endif %}
+        {% if feed.crap_filtered %}<span class="stat-chip">{{ feed.crap_filtered | commafy }} filtered</span>{% endif %}
+        {% if feed.disk_usage_mb %}<span class="stat-chip">{{ feed.disk_usage_display }}</span>{% endif %}
+        {% if feed.time_saved_display %}<span class="stat-chip">{{ feed.time_saved_display }}</span>{% endif %}
+        {% if feed.latest_episode_date %}<span class="stat-chip">Latest: {{ feed.latest_episode_date }}</span>{% endif %}
+      </div>
+      {% set has_queue = feed.sb_waiting or feed.dl_ready or feed.dl_active or feed.whisper_pending or feed.claude_pending %}
+      {% if has_queue %}
+      <div class="feed-queue">
+        <span class="queue-dot"></span>
+        Queue:{% set parts = [] %}{% if feed.sb_waiting %}{% set _ = parts.append(feed.sb_waiting ~ ' SB wait') %}{% endif %}{% if feed.dl_ready %}{% set _ = parts.append(feed.dl_ready ~ ' ready') %}{% endif %}{% if feed.dl_active %}{% set _ = parts.append(feed.dl_active ~ ' downloading') %}{% endif %}{% if feed.whisper_pending %}{% set _ = parts.append(feed.whisper_pending ~ ' whisper') %}{% endif %}{% if feed.claude_pending %}{% set _ = parts.append(feed.claude_pending ~ ' claude') %}{% endif %} {{ parts | join(' | ') }}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Edit panel (hidden) -->
+  <div id="edit-{{ feed.name }}" class="hidden" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border);">
+    <form hx-post="/ui/feed-action" hx-target="#card-{{ feed.name }}" hx-swap="outerHTML">
+      <input type="hidden" name="feed_name" value="{{ feed.name }}">
+      <input type="hidden" name="action" value="update">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Display Name</label>
+          <input type="text" name="display_name" value="{{ feed.display_name or '' }}" placeholder="Human-readable name">
+        </div>
+        {% if feed.feed_type == 'youtube' %}
+        <div class="form-group">
+          <label>Mode</label>
+          <select name="mode">
+            <option value="video" {% if feed.mode == 'video' %}selected{% endif %}>Video</option>
+            <option value="audio" {% if feed.mode == 'audio' %}selected{% endif %}>Audio</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Quality</label>
+          <input type="text" name="quality" value="{{ feed.quality }}" placeholder="1440 or max">
+        </div>
+        {% else %}
+        <input type="hidden" name="mode" value="{{ feed.mode }}">
+        <input type="hidden" name="quality" value="{{ feed.quality }}">
+        {% endif %}
+        <div class="form-group">
+          <label>LLM Trim</label>
+          <select name="llm_trim">
+            <option value="true" {% if feed.llm_trim %}selected{% endif %}>On</option>
+            <option value="false" {% if not feed.llm_trim %}selected{% endif %}>Off</option>
+          </select>
+        </div>
+      </div>
+      {% if feed.feed_type == 'youtube' %}
+      <div class="form-row">
+        <div class="form-group">
+          <label>SponsorBlock</label>
+          <select name="sponsorblock">
+            <option value="true" {% if feed.sponsorblock %}selected{% endif %}>On</option>
+            <option value="false" {% if not feed.sponsorblock %}selected{% endif %}>Off</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>SponsorBlock Categories</label>
+          <input type="text" name="sponsorblock_categories" value="{{ feed.sponsorblock_categories | join(', ') }}" placeholder="sponsor, selfpromo, interaction">
+        </div>
+        <div class="form-group">
+          <label>SponsorBlock Delay (min)</label>
+          <input type="number" name="sponsorblock_delay_minutes" value="{{ feed.sponsorblock_delay_minutes }}">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Block Shorts</label>
+          <select name="block_shorts">
+            <option value="true" {% if feed.block_shorts %}selected{% endif %}>On</option>
+            <option value="false" {% if not feed.block_shorts %}selected{% endif %}>Off</option>
+          </select>
+        </div>
+      {% else %}
+      <input type="hidden" name="sponsorblock" value="{{ feed.sponsorblock }}">
+      <input type="hidden" name="sponsorblock_categories" value="{{ feed.sponsorblock_categories | join(', ') }}">
+      <input type="hidden" name="sponsorblock_delay_minutes" value="{{ feed.sponsorblock_delay_minutes }}">
+      <input type="hidden" name="block_shorts" value="{{ feed.block_shorts }}">
+      <div class="form-row">
+      {% endif %}
+        <div class="form-group">
+          <label>Min Duration (sec)</label>
+          <input type="number" name="min_duration_seconds" value="{{ feed.min_duration_seconds }}">
+        </div>
+        <div class="form-group">
+          <label>Date Cutoff</label>
+          <input type="date" name="date_cutoff" value="{{ feed.date_cutoff[:4] + '-' + feed.date_cutoff[4:6] + '-' + feed.date_cutoff[6:] if feed.date_cutoff and feed.date_cutoff|length == 8 else feed.date_cutoff or '' }}">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Title Exclude (comma-separated)</label>
+        <input type="text" name="title_exclude" value="{{ feed.title_exclude | join(', ') }}" style="width:100%;">
+      </div>
+      <div class="form-group">
+        <label>Claude Prompt Extra</label>
+        <textarea name="claude_prompt_extra" rows="2">{{ feed.claude_prompt_extra or '' }}</textarea>
+      </div>
+      <div class="form-group">
+        <label>Claude Prompt Override</label>
+        <textarea name="claude_prompt_override" rows="2">{{ feed.claude_prompt_override or '' }}</textarea>
+      </div>
+      <div class="form-group">
+        <label>Pocket Casts URL</label>
+        <input type="text" name="pc_url" value="{{ feed.pc_url or '' }}" placeholder="https://pca.st/..." style="width:100%;">
+      </div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button type="submit" class="btn btn-small">Save</button>
+      </div>
+    </form>
+
+    <div style="display:flex; gap:8px; margin-top:12px; padding-top:8px; border-top:1px solid var(--border);">
+      <form hx-post="/ui/feed-action" hx-target="#card-{{ feed.name }}" hx-swap="outerHTML" style="display:flex; gap:8px; align-items:center;">
+        <input type="hidden" name="feed_name" value="{{ feed.name }}">
+        <input type="hidden" name="action" value="rename">
+        <input type="text" name="new_name" placeholder="New URL slug" style="width:150px;" class="btn-small">
+        <button type="submit" class="btn btn-secondary btn-small"><i data-lucide="edit-3" style="width:14px;height:14px;"></i> Rename Slug</button>
+      </form>
+      <button class="btn btn-danger btn-small"
+              hx-post="/ui/feed-action" hx-target="#card-{{ feed.name }}" hx-swap="delete"
+              hx-vals='{"feed_name":"{{ feed.name }}","action":"delete"}'
+              hx-confirm="Delete feed {{ feed.name }}? This removes all episodes and files.">
+        <i data-lucide="trash-2" style="width:14px;height:14px;"></i> Delete
+      </button>
+    </div>
+  </div>
+</div>

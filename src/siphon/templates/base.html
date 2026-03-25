@@ -546,6 +546,8 @@
 
     /* Update nav active state and re-init after htmx swaps */
     document.body.addEventListener('htmx:afterSwap', function(evt) {
+      /* Re-render Lucide icons on any swap (cards, pages) */
+      if (typeof lucide !== 'undefined') lucide.createIcons();
       if (evt.detail.target.id === 'main-content') {
         /* Update nav active state from URL */
         var path = window.location.pathname;
@@ -553,8 +555,6 @@
           var href = a.getAttribute('hx-get');
           a.classList.toggle('active', path === href || (href === '/ui/' && path === '/ui'));
         });
-        /* Re-render Lucide icons */
-        if (typeof lucide !== 'undefined') lucide.createIcons();
         /* Re-run count-up animations */
         if (typeof runCountUp === 'function') runCountUp();
       }

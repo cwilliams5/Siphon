@@ -61,6 +61,23 @@ def _redirect(request: Request, url: str):
     return RedirectResponse(url, status_code=303)
 
 
+def _render_feed_card(request: Request, feed_name: str):
+    """Render a single feed card partial for htmx swap."""
+    config = request.app.state.config
+    feeds = _get_feed_display(request)
+    feed = next((f for f in feeds if f["name"] == feed_name), None)
+    if feed is None:
+        return HTMLResponse("")
+
+    from urllib.parse import urlparse
+    parsed = urlparse(config.server.base_url)
+    auth_base_url = f"{parsed.scheme}://{config.auth.username}:{config.auth.password}@{parsed.netloc}"
+
+    tmpl = templates.env.get_template("_feed_card.html")
+    html = tmpl.render(feed=feed, auth_base_url=auth_base_url)
+    return HTMLResponse(html)
+
+
 def _flash(request: Request, text: str, msg_type: str = "info") -> None:
     if not hasattr(request.state, "messages"):
         request.state.messages = []
@@ -1010,7 +1027,7 @@ async def feed_action(
 
     if action == "update":
         return _do_update(
-            request, config, feed_name, mode, quality, sponsorblock,
+            request, config, db, feed_name, mode, quality, sponsorblock,
             sponsorblock_categories, sponsorblock_delay_minutes,
             block_shorts, min_duration_seconds,
             llm_trim, date_cutoff, title_exclude, claude_prompt_extra,
@@ -1026,7 +1043,7 @@ async def feed_action(
         return _redirect(request, "/ui/feeds")
 
 
-def _do_update(request, config, feed_name, mode, quality, sponsorblock,
+def _do_update(request, config, db, feed_name, mode, quality, sponsorblock,
                sponsorblock_categories, sponsorblock_delay_minutes,
                block_shorts, min_duration_seconds,
                llm_trim, date_cutoff, title_exclude, claude_prompt_extra,
@@ -1058,6 +1075,9 @@ def _do_update(request, config, feed_name, mode, quality, sponsorblock,
             config.feeds[i] = FeedConfig(**update)
             break
     _save_config(config)
+    if _is_htmx(request):
+        _reload_config(request.app)
+        return _render_feed_card(request, feed_name)
     return _redirect(request, "/ui/feeds")
 
 
@@ -1112,6 +1132,9 @@ def _do_rename(request, config, db, feed_name, new_name):
         pass  # Old dir didn't exist or had an invalid name — no files to move
 
     _save_config(config)
+    if _is_htmx(request):
+        _reload_config(request.app)
+        return _render_feed_card(request, new_name)
     return _redirect(request, "/ui/feeds")
 
 
@@ -1134,6 +1157,8 @@ def _do_delete(request, config, db, feed_name):
     db.delete_episodes_by_feed(feed_name)
     db.delete_feed(feed_name)
     _save_config(config)
+    if _is_htmx(request):
+        return HTMLResponse("")
     return _redirect(request, "/ui/feeds")
 
 
@@ -1198,6 +1223,9 @@ def _do_catchup(request, config, db, feed_name):
         db.update_episode_status(ep["video_id"], feed_name, "pruned")
 
     _save_config(config)
+    if _is_htmx(request):
+        _reload_config(request.app)
+        return _render_feed_card(request, feed_name)
     return _redirect(request, "/ui/feeds")
 
 

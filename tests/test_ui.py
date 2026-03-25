@@ -499,7 +499,7 @@ class TestHtmxActions:
         }, headers=HTMX_HEADERS, follow_redirects=False)
         assert resp.headers.get("HX-Redirect") == "/ui/feeds"
 
-    async def test_feed_action_htmx_returns_hx_redirect(self, client):
+    async def test_feed_update_htmx_returns_card(self, client):
         resp = await client.post("/ui/feed-action", data={
             "feed_name": "test-feed",
             "action": "update",
@@ -514,9 +514,12 @@ class TestHtmxActions:
             "title_exclude": "",
             "claude_prompt_extra": "",
         }, headers=HTMX_HEADERS, follow_redirects=False)
-        assert resp.headers.get("HX-Redirect") == "/ui/feeds"
+        assert resp.status_code == 200
+        assert "test-feed" in resp.text
+        assert "card-test-feed" in resp.text
+        assert "<html" not in resp.text
 
-    async def test_delete_feed_htmx_returns_hx_redirect(self, client, config):
+    async def test_delete_feed_htmx_removes_card(self, client, config):
         # Add a feed to delete
         await client.post("/ui/add", data={
             "url": "https://www.youtube.com/@ToDelete",
@@ -530,4 +533,5 @@ class TestHtmxActions:
             "feed_name": "to-delete",
             "action": "delete",
         }, headers=HTMX_HEADERS, follow_redirects=False)
-        assert resp.headers.get("HX-Redirect") == "/ui/feeds"
+        assert resp.status_code == 200
+        assert resp.text == ""
