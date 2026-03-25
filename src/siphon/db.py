@@ -343,11 +343,17 @@ class Database:
         ).fetchone()
         return int(row["total"])
 
-    def get_oldest_done_episodes(self, limit: int) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT * FROM episodes WHERE status = 'done' ORDER BY upload_date ASC LIMIT ?",
-            (limit,),
-        ).fetchall()
+    def get_oldest_done_episodes(self, limit: int, feed_name: str | None = None) -> list[dict]:
+        if feed_name:
+            rows = self.conn.execute(
+                "SELECT * FROM episodes WHERE status = 'done' AND feed_name = ? ORDER BY upload_date ASC LIMIT ?",
+                (feed_name, limit),
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                "SELECT * FROM episodes WHERE status = 'done' ORDER BY upload_date ASC LIMIT ?",
+                (limit,),
+            ).fetchall()
         return [dict(r) for r in rows]
 
     def get_feed_episode_count(self, feed_name: str) -> int:

@@ -998,10 +998,8 @@ async def _prune_disk(config: SiphonConfig, db: Database) -> None:
         count = db.get_feed_episode_count(feed.name)
         if count > keep_limit:
             excess = count - keep_limit
-            oldest = db.get_oldest_done_episodes(excess)
+            oldest = db.get_oldest_done_episodes(excess, feed_name=feed.name)
             for ep in oldest:
-                if ep["feed_name"] != feed.name:
-                    continue
                 if ep.get("file_path"):
                     try:
                         os.remove(ep["file_path"])
