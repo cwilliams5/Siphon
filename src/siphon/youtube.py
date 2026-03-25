@@ -63,7 +63,7 @@ def resolve_channel_id(url: str, api_key: str, cooldown_hours: int = 4) -> str |
 
     # Extract handle
     handle = None
-    match = re.search(r"youtube\.com/@([\w-]+)", url)
+    match = re.search(r"youtube\.com/@([^\s/]+)", url)
     if match:
         handle = match.group(1)
     if not handle:
@@ -72,6 +72,8 @@ def resolve_channel_id(url: str, api_key: str, cooldown_hours: int = 4) -> str |
             handle = match.group(1)
 
     if handle:
+        from urllib.parse import unquote
+        handle = unquote(handle)
         data = _api_get(CHANNELS_URL, {
             "key": api_key,
             "forHandle": handle,
