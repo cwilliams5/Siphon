@@ -1082,10 +1082,9 @@ async def _auto_prune_pocketcasts(config: SiphonConfig, db: Database) -> None:
     if not feeds_ready:
         return
 
-    # Check N feeds per cycle
+    # Check N feeds per cycle, oldest PC check first
     limit = pc.feeds_per_check
-    # Sort by last_checked_at to round-robin
-    feeds_ready.sort(key=lambda x: (db.get_feed(x[0].name) or {}).get("last_checked_at") or "")
+    feeds_ready.sort(key=lambda x: (db.get_feed(x[0].name) or {}).get("pc_last_checked") or "")
     batch = feeds_ready[:limit]
 
     pruned_total = 0
@@ -1098,6 +1097,13 @@ async def _auto_prune_pocketcasts(config: SiphonConfig, db: Database) -> None:
             logger.warning("PC prune failed for %s: %s", fc.name, exc)
             clear_token()  # Force re-login on next attempt
             continue
+
+        # Mark this feed as checked for PC prune
+        db.conn.execute(
+            "UPDATE feeds SET pc_last_checked = datetime('now') WHERE name = ?",
+            (fc.name,),
+        )
+        db.conn.commit()
 
         if not completed_ids:
             continue
