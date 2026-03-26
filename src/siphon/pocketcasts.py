@@ -19,22 +19,58 @@ CACHE_BASE = "https://cache.pocketcasts.com"
 _token: str | None = None
 _token_lock = threading.Lock()
 
+# Login backoff state (resets on restart)
+_login_failures: int = 0
+_login_backoff_until: datetime | None = None
+_BACKOFF_HOURS = [0, 1, 4, 24, 72, 168]  # 0, 1h, 4h, 1d, 3d, 1wk (caps at 1wk)
+
+
+class LoginBackoff(Exception):
+    """Raised when login is in backoff period."""
+    pass
+
 
 def _login(email: str, password: str) -> str:
-    """Login to Pocket Casts and return a bearer token."""
-    global _token
+    """Login to Pocket Casts and return a bearer token.
+
+    Exponential backoff on consecutive failures: 0, 1h, 4h, 1d, 3d, 1wk.
+    Resets on success or process restart.
+    """
+    global _token, _login_failures, _login_backoff_until
     with _token_lock:
         if _token:
             return _token
-        resp = httpx.post(
-            f"{API_BASE}/user/login",
-            json={"email": email, "password": password, "scope": "webplayer"},
-            headers={"User-Agent": UA},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        _token = resp.json()["token"]
-        return _token
+
+        # Check backoff
+        if _login_backoff_until and datetime.now(timezone.utc) < _login_backoff_until:
+            remaining = (_login_backoff_until - datetime.now(timezone.utc)).total_seconds() / 3600
+            raise LoginBackoff(f"Pocket Casts login backed off for {remaining:.1f}h more ({_login_failures} consecutive failures)")
+
+        try:
+            resp = httpx.post(
+                f"{API_BASE}/user/login",
+                json={"email": email, "password": password, "scope": "webplayer"},
+                headers={"User-Agent": UA},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            _token = resp.json()["token"]
+            # Reset backoff on success
+            _login_failures = 0
+            _login_backoff_until = None
+            return _token
+        except Exception as exc:
+            _login_failures += 1
+            backoff_idx = min(_login_failures, len(_BACKOFF_HOURS) - 1)
+            backoff_hours = _BACKOFF_HOURS[backoff_idx]
+            if backoff_hours > 0:
+                from datetime import timedelta
+                _login_backoff_until = datetime.now(timezone.utc) + timedelta(hours=backoff_hours)
+                logger.warning(
+                    "Pocket Casts login failed (%d consecutive) — backing off %dh. Check credentials.",
+                    _login_failures, backoff_hours,
+                )
+            raise
 
 
 def _headers(token: str) -> dict:
