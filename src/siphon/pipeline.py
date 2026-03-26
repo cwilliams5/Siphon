@@ -1072,6 +1072,11 @@ async def _auto_prune_pocketcasts(config: SiphonConfig, db: Database) -> None:
             else:
                 feeds_needing_uuid.append(fc)
                 continue
+        # Smart skip: need at least 2 done episodes to prune (always keep 1)
+        done_count = db.get_feed_episode_count(fc.name)
+        if done_count < 2:
+            continue
+
         feeds_ready.append((fc, pc_uuid))
 
     if not feeds_ready:

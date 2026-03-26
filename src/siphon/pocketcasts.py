@@ -55,10 +55,16 @@ def _extract_uuid_from_pc_url(pc_url: str) -> str | None:
     return None
 
 
+class TokenExpired(Exception):
+    """Raised when the Pocket Casts token has expired (401)."""
+    pass
+
+
 def get_episode_statuses(token: str, podcast_uuid: str) -> dict[str, dict]:
     """Get episode play statuses from Pocket Casts.
 
     Returns a dict of {pc_episode_uuid: {playingStatus, isDeleted, playedUpTo}}.
+    Raises TokenExpired on 401.
     """
     resp = httpx.post(
         f"{API_BASE}/user/podcast/episodes",
@@ -66,6 +72,8 @@ def get_episode_statuses(token: str, podcast_uuid: str) -> dict[str, dict]:
         headers=_headers(token),
         timeout=10,
     )
+    if resp.status_code == 401:
+        raise TokenExpired("Pocket Casts token expired")
     resp.raise_for_status()
     episodes = resp.json().get("episodes", [])
     return {ep["uuid"]: ep for ep in episodes}
@@ -105,10 +113,20 @@ def get_episode_mapping(podcast_uuid: str) -> dict[str, str]:
 def get_completed_video_ids(
     email: str, password: str, podcast_uuid: str
 ) -> set[str]:
-    """Get Siphon video_ids for episodes completed or archived in Pocket Casts."""
+    """Get Siphon video_ids for episodes completed or archived in Pocket Casts.
+
+    Automatically retries once on token expiry (401).
+    """
     token = _login(email, password)
 
-    statuses = get_episode_statuses(token, podcast_uuid)
+    try:
+        statuses = get_episode_statuses(token, podcast_uuid)
+    except TokenExpired:
+        logger.info("Pocket Casts token expired, re-authenticating")
+        clear_token()
+        token = _login(email, password)
+        statuses = get_episode_statuses(token, podcast_uuid)
+
     mapping = get_episode_mapping(podcast_uuid)
 
     completed = set()
