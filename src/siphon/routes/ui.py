@@ -1048,30 +1048,54 @@ def _do_update(request, config, db, feed_name, mode, quality, sponsorblock,
                block_shorts, min_duration_seconds,
                llm_trim, date_cutoff, title_exclude, claude_prompt_extra,
                claude_prompt_override, display_name, pc_url=""):
+    defaults = config.defaults
     for i, fc in enumerate(config.feeds):
         if fc.name == feed_name:
-            update = {
+            # Only store values that differ from defaults (avoid baking defaults into per-feed config)
+            update: dict = {
                 "name": fc.name,
                 "url": fc.url,
                 "type": fc.type,
-                "mode": mode,
-                "quality": quality if quality == "max" else int(quality),
-                "sponsorblock": sponsorblock == "true",
-                "sponsorblock_categories": (
-                    [c.strip() for c in sponsorblock_categories.split(",") if c.strip()]
-                    if sponsorblock_categories else []
-                ),
-                "sponsorblock_delay_minutes": sponsorblock_delay_minutes,
-                "block_shorts": block_shorts == "true",
-                "min_duration_seconds": min_duration_seconds,
-                "llm_trim": llm_trim == "true",
-                "date_cutoff": _normalize_date_cutoff(date_cutoff) if date_cutoff else None,
-                "title_exclude": [t.strip() for t in title_exclude.split(",") if t.strip()],
-                "claude_prompt_extra": claude_prompt_extra if claude_prompt_extra else None,
-                "claude_prompt_override": claude_prompt_override if claude_prompt_override else None,
-                "display_name": display_name if display_name else None,
-                "pc_url": pc_url if pc_url else None,
             }
+            parsed_quality = quality if quality == "max" else int(quality)
+            parsed_sb = sponsorblock == "true"
+            parsed_sb_cats = (
+                [c.strip() for c in sponsorblock_categories.split(",") if c.strip()]
+                if sponsorblock_categories else []
+            )
+            parsed_block_shorts = block_shorts == "true"
+            parsed_llm_trim = llm_trim == "true"
+            parsed_title_exclude = [t.strip() for t in title_exclude.split(",") if t.strip()]
+
+            if mode != defaults.mode:
+                update["mode"] = mode
+            if parsed_quality != defaults.quality:
+                update["quality"] = parsed_quality
+            if parsed_sb != defaults.sponsorblock:
+                update["sponsorblock"] = parsed_sb
+            if parsed_sb_cats != defaults.sponsorblock_categories:
+                update["sponsorblock_categories"] = parsed_sb_cats
+            if sponsorblock_delay_minutes != defaults.sponsorblock_delay_minutes:
+                update["sponsorblock_delay_minutes"] = sponsorblock_delay_minutes
+            if parsed_block_shorts != defaults.block_shorts:
+                update["block_shorts"] = parsed_block_shorts
+            if min_duration_seconds != defaults.min_duration_seconds:
+                update["min_duration_seconds"] = min_duration_seconds
+            if parsed_llm_trim != defaults.llm_trim:
+                update["llm_trim"] = parsed_llm_trim
+            if _normalize_date_cutoff(date_cutoff) if date_cutoff else None:
+                update["date_cutoff"] = _normalize_date_cutoff(date_cutoff)
+            if parsed_title_exclude:
+                update["title_exclude"] = parsed_title_exclude
+            if claude_prompt_extra:
+                update["claude_prompt_extra"] = claude_prompt_extra
+            if claude_prompt_override:
+                update["claude_prompt_override"] = claude_prompt_override
+            if display_name:
+                update["display_name"] = display_name
+            if pc_url:
+                update["pc_url"] = pc_url
+
             config.feeds[i] = FeedConfig(**update)
             break
     _save_config(config)
