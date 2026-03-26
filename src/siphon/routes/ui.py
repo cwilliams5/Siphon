@@ -1163,23 +1163,23 @@ def _do_delete(request, config, db, feed_name):
 
 
 def _do_catchup(request, config, db, feed_name):
-    # Find the most recent episode actually in RSS
-    latest = db.conn.execute(
+    # Pipeline statuses — never touch these
+    pipeline_statuses = ("pending", "eligible", "downloading", "pending_whisper", "pending_claude")
+
+    # Find the newest episode across all statuses (for date cutoff)
+    newest = db.conn.execute(
         """SELECT upload_date FROM episodes
-           WHERE feed_name = ? AND status = 'done'
-             AND llm_trim_status IN ('done', 'skipped')
+           WHERE feed_name = ? AND status NOT IN ('filtered', 'pruned')
            ORDER BY upload_date DESC LIMIT 1""",
         (feed_name,),
     ).fetchone()
 
-    if not latest or not latest["upload_date"]:
-        # No episodes in RSS — just set cutoff to today
+    if not newest or not newest["upload_date"]:
         new_cutoff = datetime.now(timezone.utc).strftime("%Y%m%d")
     else:
-        # Set cutoff to 1 day before the latest episode
         from datetime import datetime as dt
-        latest_date = dt.strptime(latest["upload_date"], "%Y%m%d")
-        new_cutoff = (latest_date - timedelta(days=1)).strftime("%Y%m%d")
+        newest_date = dt.strptime(newest["upload_date"], "%Y%m%d")
+        new_cutoff = (newest_date - timedelta(days=1)).strftime("%Y%m%d")
 
     # Update config
     for i, fc in enumerate(config.feeds):
@@ -1189,21 +1189,31 @@ def _do_catchup(request, config, db, feed_name):
             config.feeds[i] = FeedConfig(**update)
             break
 
-    # Delete files and prune episodes OLDER than the latest RSS episode
+    # Find the latest RSS episode to keep (must keep at least 1 in RSS)
+    latest_rss = db.conn.execute(
+        """SELECT video_id FROM episodes
+           WHERE feed_name = ? AND status = 'done'
+             AND llm_trim_status IN ('done', 'skipped')
+           ORDER BY upload_date DESC LIMIT 1""",
+        (feed_name,),
+    ).fetchone()
+    keep_video_id = latest_rss["video_id"] if latest_rss else None
+
+    # Prune done episodes except the latest RSS one; never touch pipeline episodes
     download_dir = config.storage.download_dir
     all_episodes = db.get_episodes_by_feed(feed_name)
-    keep_id = latest["upload_date"] if latest else None
 
     for ep in all_episodes:
-        # Keep the latest RSS episode, prune everything else
-        if ep["status"] == "done" and ep.get("llm_trim_status") in ("done", "skipped"):
-            if ep.get("upload_date") == keep_id:
-                # This is the one we're keeping (or one of them if same day)
-                keep_id = None  # Only keep the first match
-                continue
+        # Never touch pipeline episodes
+        if ep["status"] in pipeline_statuses:
+            continue
 
-        # Skip episodes that aren't taking up disk space
+        # Skip already pruned/filtered
         if ep["status"] in ("filtered", "pruned"):
+            continue
+
+        # Keep the latest RSS episode
+        if ep["video_id"] == keep_video_id:
             continue
 
         # Delete file if exists
