@@ -208,8 +208,9 @@ async def _check_youtube_feed(resolved, config, db) -> None:
             db.update_feed_image(resolved.name, meta["image_url"])
 
     # Get known video IDs for this feed to detect where to stop
+    # Exclude filtered episodes — they shouldn't block paging to older content
     existing = db.get_episodes_by_feed(resolved.name)
-    known_ids = {ep["video_id"] for ep in existing}
+    known_ids = {ep["video_id"] for ep in existing if ep["status"] != "filtered"}
 
     # Fetch videos from API — stops at cutoff date or known video
     loop = asyncio.get_event_loop()
