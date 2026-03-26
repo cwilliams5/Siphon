@@ -153,6 +153,13 @@ async def check_feeds(config: SiphonConfig, db: Database) -> None:
                 logger.error("Error checking feed %s: %s", feed_db["name"], exc)
                 db.update_feed_checked(feed_db["name"], error=str(exc))
 
+    # Auto-prune completed Pocket Casts episodes
+    if config.pocketcasts.auto_prune and config.pocketcasts.email:
+        try:
+            await _auto_prune_pocketcasts(config, db)
+        except Exception as exc:
+            logger.warning("Pocket Casts auto-prune failed: %s", exc)
+
     log_activity("Feed check complete")
 
 
@@ -1025,6 +1032,117 @@ async def _prune_disk(config: SiphonConfig, db: Database) -> None:
             db.update_episode_status(ep["video_id"], ep["feed_name"], "pruned")
             usage -= file_size
             logger.info("Pruned %s from %s (disk limit)", ep["video_id"], ep["feed_name"])
+
+
+# ---------------------------------------------------------------------- #
+# Pocket Casts auto-prune
+# ---------------------------------------------------------------------- #
+
+
+async def _auto_prune_pocketcasts(config: SiphonConfig, db: Database) -> None:
+    """Prune episodes that have been completed or archived in Pocket Casts."""
+    from siphon.pocketcasts import (
+        _extract_uuid_from_pc_url, _login, get_completed_video_ids, clear_token,
+    )
+
+    pc = config.pocketcasts
+    loop = asyncio.get_event_loop()
+
+    # Get feeds with pc_url set, prioritize those without pc_uuid (need mapping)
+    feeds_needing_uuid = []
+    feeds_ready = []
+    for fc in config.feeds:
+        resolved = resolve_feed(fc, config.defaults)
+        if not resolved.pc_url:
+            continue
+        feed_db = db.get_feed(fc.name)
+        if not feed_db:
+            continue
+        pc_uuid = feed_db.get("pc_uuid")
+        if not pc_uuid:
+            # Try to extract from pc_url
+            pc_uuid = _extract_uuid_from_pc_url(resolved.pc_url)
+            if pc_uuid:
+                db.conn.execute(
+                    "UPDATE feeds SET pc_uuid = ? WHERE name = ?",
+                    (pc_uuid, fc.name),
+                )
+                db.conn.commit()
+                logger.info("Mapped PC UUID %s for %s", pc_uuid, fc.name)
+            else:
+                feeds_needing_uuid.append(fc)
+                continue
+        feeds_ready.append((fc, pc_uuid))
+
+    if not feeds_ready:
+        return
+
+    # Check N feeds per cycle
+    limit = pc.feeds_per_check
+    # Sort by last_checked_at to round-robin
+    feeds_ready.sort(key=lambda x: (db.get_feed(x[0].name) or {}).get("last_checked_at") or "")
+    batch = feeds_ready[:limit]
+
+    pruned_total = 0
+    for fc, pc_uuid in batch:
+        try:
+            completed_ids = await loop.run_in_executor(
+                None, get_completed_video_ids, pc.email, pc.password, pc_uuid,
+            )
+        except Exception as exc:
+            logger.warning("PC prune failed for %s: %s", fc.name, exc)
+            clear_token()  # Force re-login on next attempt
+            continue
+
+        if not completed_ids:
+            continue
+
+        # Get done episodes for this feed
+        episodes = db.get_episodes_by_feed(fc.name)
+        done_episodes = [
+            ep for ep in episodes
+            if ep["status"] == "done"
+        ]
+
+        if not done_episodes:
+            continue
+
+        # Find the latest done episode to keep (never prune the newest)
+        done_episodes.sort(key=lambda e: e.get("upload_date") or "", reverse=True)
+        keep_video_id = done_episodes[0]["video_id"]
+
+        for ep in done_episodes:
+            if ep["video_id"] == keep_video_id:
+                continue  # Always keep latest
+            if ep["video_id"] not in completed_ids:
+                continue  # Not completed in PC
+
+            # Prune this episode
+            if ep.get("file_path"):
+                try:
+                    os.remove(ep["file_path"])
+                except OSError:
+                    pass
+
+            # Delete transcript
+            transcript = os.path.join(
+                config.storage.download_dir, fc.name,
+                f"{ep['video_id']}_transcript.json",
+            )
+            try:
+                os.remove(transcript)
+            except OSError:
+                pass
+
+            db.update_episode_status(ep["video_id"], fc.name, "pruned")
+            pruned_total += 1
+            logger.info("Auto-pruned %s from %s (completed in Pocket Casts)",
+                        ep["video_id"], fc.name)
+
+        await asyncio.sleep(20)  # Be nice to PC API
+
+    if pruned_total:
+        log_activity(f"Auto-pruned {pruned_total} completed episodes via Pocket Casts")
 
 
 # ---------------------------------------------------------------------- #

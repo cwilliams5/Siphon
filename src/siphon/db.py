@@ -86,6 +86,8 @@ MIGRATIONS = [
     "ALTER TABLE episodes ADD COLUMN whisper_model TEXT",
     # SponsorBlock seconds removed (total duration of all SB segments)
     "ALTER TABLE episodes ADD COLUMN sb_seconds_removed REAL",
+    # Pocket Casts podcast UUID for auto-prune
+    "ALTER TABLE feeds ADD COLUMN pc_uuid TEXT",
 ]
 
 

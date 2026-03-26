@@ -144,6 +144,10 @@ python -m pytest tests/
 | `schedule` | `check_interval_minutes` | `30` | How often to check for new episodes |
 | `schedule` | `youtube_max_downloads_per_hour` | `10` | YouTube download rate limit |
 | `schedule` | `podcast_max_downloads_per_hour` | `120` | Podcast download rate limit |
+| `pocketcasts` | `email` | `""` | Pocket Casts login email (for auto-prune) |
+| `pocketcasts` | `password` | `""` | Pocket Casts login password |
+| `pocketcasts` | `auto_prune` | `false` | Auto-prune episodes completed/archived in Pocket Casts |
+| `pocketcasts` | `feeds_per_check` | `5` | Feeds to check per cycle (20s delay between each) |
 | `defaults` | `sponsorblock_delay_minutes` | `1440` | Wait for SB segments to be crowdsourced |
 | `defaults` | `llm_trim` | `false` | Enable Whisper + Claude ad detection |
 | `llm` | `whisper_model` | `base` | Whisper model size (tiny/base/small/medium/large) |

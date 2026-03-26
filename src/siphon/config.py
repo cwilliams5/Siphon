@@ -97,6 +97,13 @@ class YouTubeConfig(BaseModel):
     country: str = "US"
 
 
+class PocketCastsConfig(BaseModel):
+    email: str = ""
+    password: str = ""
+    auto_prune: bool = False
+    feeds_per_check: int = 5
+
+
 class CookiesConfig(BaseModel):
     source: str = "browser"
     browser: str = "firefox"
@@ -233,6 +240,7 @@ class SiphonConfig(BaseModel):
     youtube: YouTubeConfig
     schedule: ScheduleConfig = ScheduleConfig()
     cookies: CookiesConfig = CookiesConfig()
+    pocketcasts: PocketCastsConfig = PocketCastsConfig()
     defaults: FeedDefaults = FeedDefaults()
     llm: LLMConfig = LLMConfig()
     feeds: list[FeedConfig]
