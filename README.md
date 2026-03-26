@@ -147,7 +147,8 @@ python -m pytest tests/
 | `pocketcasts` | `email` | `""` | Pocket Casts login email (for auto-prune) |
 | `pocketcasts` | `password` | `""` | Pocket Casts login password |
 | `pocketcasts` | `auto_prune` | `false` | Auto-prune episodes completed/archived in Pocket Casts |
-| `pocketcasts` | `feeds_per_check` | `5` | Feeds to check per cycle (20s delay between each) |
+| `pocketcasts` | `feeds_per_check` | `5` | Max feeds to check per cycle (20s delay between each) |
+| `pocketcasts` | `auto_prune_interval_hours` | `24` | Hours between rechecking each feed |
 | `defaults` | `sponsorblock_delay_minutes` | `1440` | Wait for SB segments to be crowdsourced |
 | `defaults` | `llm_trim` | `false` | Enable Whisper + Claude ad detection |
 | `llm` | `whisper_model` | `base` | Whisper model size (tiny/base/small/medium/large) |

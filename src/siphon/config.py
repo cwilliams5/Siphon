@@ -102,6 +102,7 @@ class PocketCastsConfig(BaseModel):
     password: str = ""
     auto_prune: bool = False
     feeds_per_check: int = 5
+    auto_prune_interval_hours: int = 24
 
 
 class CookiesConfig(BaseModel):

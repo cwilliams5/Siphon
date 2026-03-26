@@ -16,7 +16,8 @@ pocketcasts:
   email: ""
   password: ""
   auto_prune: false  # Auto-prune episodes completed/archived in Pocket Casts
-  feeds_per_check: 5  # Feeds to check per cycle (20s delay between each)
+  feeds_per_check: 5  # Max feeds to check per cycle (20s delay between each)
+  auto_prune_interval_hours: 24  # Hours between rechecking each feed
 
 storage:
   download_dir: "/path/to/downloads"

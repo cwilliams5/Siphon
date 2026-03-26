@@ -1082,10 +1082,20 @@ async def _auto_prune_pocketcasts(config: SiphonConfig, db: Database) -> None:
     if not feeds_ready:
         return
 
+    # Filter out feeds checked within the interval window
+    interval_hours = pc.auto_prune_interval_hours
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=interval_hours)).strftime("%Y-%m-%d %H:%M:%S")
+    feeds_due = [
+        (fc, uuid) for fc, uuid in feeds_ready
+        if ((db.get_feed(fc.name) or {}).get("pc_last_checked") or "") < cutoff
+    ]
+
+    if not feeds_due:
+        return
+
     # Check N feeds per cycle, oldest PC check first
-    limit = pc.feeds_per_check
-    feeds_ready.sort(key=lambda x: (db.get_feed(x[0].name) or {}).get("pc_last_checked") or "")
-    batch = feeds_ready[:limit]
+    feeds_due.sort(key=lambda x: (db.get_feed(x[0].name) or {}).get("pc_last_checked") or "")
+    batch = feeds_due[:pc.feeds_per_check]
 
     pruned_total = 0
     for fc, pc_uuid in batch:
