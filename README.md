@@ -36,6 +36,7 @@ Built for a very specific stack: **Windows, Tailscale Funnel, Pocket Casts, Clau
 - **System tray icon** for pause/resume/quit with adjustable Whisper workers (runs at below-normal CPU priority)
 - **Tailscale Funnel** for HTTPS RSS serving to Pocket Casts, media served over Tailnet only (no auth needed on your network)
 - **Per-feed control** &rarr; toggle SponsorBlock, LLM trim, short blocking per feed; filter by title, duration, date; supplement or fully replace the Claude prompt per feed
+- **Auto-prune** &rarr; episodes you finish in Pocket Casts are automatically cleaned up via the Pocket Casts API
 - **Auto-ban** for vulnerability scanners (fail2ban-style IP blocking)
 
 ## Web UI
@@ -57,6 +58,15 @@ Available at `http://localhost:8585/ui/` (localhost only, no auth). Three themes
 - **Whisper workers** — adjustable (1-5, for live system use vs overnight processing)
 - **Test YouTube Login** — verify Firefox cookie status
 - **Open Config** — launch web UI
+
+## Auto-Prune
+
+Siphon integrates with the Pocket Casts API to automatically clean up episodes you've finished listening to or archived. Runs in the background — no manual maintenance needed.
+
+- Episodes marked as **completed** or **archived** in Pocket Casts are pruned from disk
+- Always keeps at least 1 episode per feed (Pocket Casts requires it for private feeds)
+- Checks a few feeds per cycle with configurable interval (default: every 24 hours per feed)
+- Requires Pocket Casts email/password login (no SSO)
 
 ## Setup
 
