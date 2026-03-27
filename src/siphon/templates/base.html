@@ -521,7 +521,7 @@
           }
           barHtml += '<span>Limits: YT ' + (sys.youtube_downloads_this_hour||0) + '/' + (sys.youtube_downloads_max||0) + '/hr';
           barHtml += ' | Pod ' + (sys.podcast_downloads_this_hour||0) + '/' + (sys.podcast_downloads_max||0) + '/hr</span>';
-          barHtml += '<span>Queued: DL ' + (sys.dl_queue||0) + ' | Whisper ' + (sys.whisper_queue||0) + ' | Claude ' + (sys.claude_queue||0) + '</span>';
+          barHtml += '<span>Queued: SB ' + (sys.sb_queue||0) + ' | DL ' + (sys.dl_queue||0) + ' | Whisper ' + (sys.whisper_queue||0) + ' | Claude ' + (sys.claude_queue||0) + '</span>';
           barHtml += '<span>Active: DL ' + (sys.active_dl||0) + ' | Whisper ' + (sys.active_whisper||0) + ' | Claude ' + (sys.active_claude||0) + '</span>';
           document.getElementById('activity-status-bar').innerHTML = barHtml;
           var entries = data.entries || [];

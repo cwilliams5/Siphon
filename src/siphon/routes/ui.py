@@ -280,6 +280,7 @@ def _get_system_status(config: SiphonConfig, db: Database) -> dict:
 
     row = db.conn.execute(
         "SELECT "
+        "  SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS sb_queue, "
         "  SUM(CASE WHEN status = 'eligible' THEN 1 ELSE 0 END) AS dl_queue, "
         "  SUM(CASE WHEN status = 'pending_whisper' THEN 1 ELSE 0 END) AS whisper_queue, "
         "  SUM(CASE WHEN status = 'pending_claude' THEN 1 ELSE 0 END) AS claude_queue, "
@@ -292,6 +293,7 @@ def _get_system_status(config: SiphonConfig, db: Database) -> dict:
         "youtube_downloads_max": sched.youtube_max_downloads_per_hour,
         "podcast_downloads_this_hour": pod_recent,
         "podcast_downloads_max": sched.podcast_max_downloads_per_hour,
+        "sb_queue": int(row["sb_queue"] or 0),
         "dl_queue": int(row["dl_queue"] or 0),
         "whisper_queue": int(row["whisper_queue"] or 0),
         "claude_queue": int(row["claude_queue"] or 0),
