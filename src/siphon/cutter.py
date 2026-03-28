@@ -68,6 +68,64 @@ def validate_file(file_path: str) -> bool:
     return True
 
 
+def normalize_timestamps(file_path: str) -> bool:
+    """Normalize a media file's timestamps to start at zero.
+
+    Fixes audio/video desync caused by SponsorBlock stream-copy cuts
+    leaving non-zero start times. Stream copy — no re-encoding.
+    Returns True if normalization was applied, False if not needed.
+    """
+    # Check if start times are non-zero
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-show_entries", "stream=start_time",
+        "-of", "csv=p=0",
+        file_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    if result.returncode != 0:
+        return False
+
+    needs_fix = False
+    for line in result.stdout.strip().split("\n"):
+        try:
+            start = float(line.strip())
+            if start > 0.5:  # More than 500ms offset
+                needs_fix = True
+                break
+        except (ValueError, TypeError):
+            continue
+
+    if not needs_fix:
+        return False
+
+    logger.info("Normalizing timestamps for %s (non-zero start detected)", file_path)
+
+    ext = os.path.splitext(file_path)[1]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        temp_output = os.path.join(tmpdir, f"normalized{ext}")
+        cmd = [
+            "ffmpeg", "-y",
+            "-i", file_path,
+            "-c", "copy",
+            "-avoid_negative_ts", "make_zero",
+            temp_output,
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        if result.returncode != 0:
+            logger.warning("Timestamp normalization failed: %s", result.stderr[:200])
+            return False
+
+        if not validate_file(temp_output):
+            logger.warning("Normalized file failed validation, keeping original")
+            return False
+
+        import shutil
+        shutil.move(temp_output, file_path)
+        logger.info("Timestamps normalized for %s", file_path)
+        return True
+
+
 def cut_segments(
     input_path: str,
     segments: list[dict],
@@ -157,6 +215,7 @@ def cut_segments(
             "-safe", "0",
             "-i", list_path,
             "-c", "copy",
+            "-avoid_negative_ts", "make_zero",
             temp_output,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)

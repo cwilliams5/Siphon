@@ -563,6 +563,14 @@ async def _download_youtube_episode(episode, resolved, config, db) -> None:
             logger.info("SponsorBlock segments for %s: %d (%.1fs removed)", video_id, sb_cuts, sb_secs)
             sb_kwargs = {"sb_cuts_applied": sb_cuts, "sb_seconds_removed": sb_secs}
 
+        # Normalize timestamps (fixes SB stream-copy desync)
+        from siphon.cutter import normalize_timestamps
+        await loop.run_in_executor(None, normalize_timestamps, path)
+
+        # Update file size after normalization
+        if os.path.exists(path):
+            size = os.path.getsize(path)
+
         next_status = "pending_whisper" if resolved.llm_trim else "done"
         db.update_episode_status(
             video_id, feed_name, next_status,
@@ -633,6 +641,12 @@ async def _download_podcast_episode(episode, resolved, config, db) -> None:
         _delete_file(output_path)
         db.update_episode_status(video_id, feed_name, "filtered", filter_reason=filter_reason, duration=duration)
         return
+
+    # Normalize timestamps if needed
+    from siphon.cutter import normalize_timestamps
+    await loop.run_in_executor(None, normalize_timestamps, output_path)
+    if os.path.exists(output_path):
+        file_size = os.path.getsize(output_path)
 
     next_status = "pending_whisper" if resolved.llm_trim else "done"
     db.update_episode_status(
@@ -962,6 +976,11 @@ async def _process_one_claude(ep: dict, config: SiphonConfig, db: Database) -> N
                         log_activity(f"LLM cut failed, serving uncut: {title[:40]}", feed=feed_name, level="warning")
                         cut_failed = True
                         high_confidence = []  # Record 0 cuts applied
+
+        # Normalize timestamps after cuts
+        if file_path and not cut_failed:
+            from siphon.cutter import normalize_timestamps
+            await loop.run_in_executor(None, normalize_timestamps, file_path)
 
         # Delete transcript file
         try:
