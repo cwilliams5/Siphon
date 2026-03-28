@@ -153,6 +153,9 @@ async def check_feeds(config: SiphonConfig, db: Database) -> None:
                 logger.error("Error checking feed %s: %s", feed_db["name"], exc)
                 db.update_feed_checked(feed_db["name"], error=str(exc))
 
+    # Clean up orphaned temp files from interrupted downloads/cuts
+    _cleanup_temp_files(config)
+
     # Auto-prune completed Pocket Casts episodes
     if config.pocketcasts.auto_prune and config.pocketcasts.email:
         try:
@@ -1065,6 +1068,31 @@ async def _prune_disk(config: SiphonConfig, db: Database) -> None:
             db.update_episode_status(ep["video_id"], ep["feed_name"], "pruned")
             usage -= file_size
             logger.info("Pruned %s from %s (disk limit)", ep["video_id"], ep["feed_name"])
+
+
+# ---------------------------------------------------------------------- #
+# Temp file cleanup
+# ---------------------------------------------------------------------- #
+
+
+def _cleanup_temp_files(config: SiphonConfig) -> None:
+    """Remove orphaned temp/keyframes files from media directories."""
+    import glob
+    download_dir = config.storage.download_dir
+    if not os.path.isdir(download_dir):
+        return
+    patterns = ["*.temp.*", "*.keyframes.*", "*.part", "*.ytdl"]
+    removed = 0
+    for pattern in patterns:
+        for path in glob.glob(os.path.join(download_dir, "**", pattern), recursive=True):
+            try:
+                os.remove(path)
+                removed += 1
+            except OSError:
+                pass
+    if removed:
+        logger.info("Cleaned up %d orphaned temp files", removed)
+        log_activity(f"Cleaned up {removed} orphaned temp files")
 
 
 # ---------------------------------------------------------------------- #
