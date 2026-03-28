@@ -42,6 +42,32 @@ def get_duration(file_path: str) -> float:
     return float(result.stdout.strip())
 
 
+def validate_file(file_path: str) -> bool:
+    """Validate a media file using ffprobe. Returns True if the file is valid."""
+    if not os.path.exists(file_path):
+        return False
+    cmd = [
+        "ffprobe",
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "csv=p=0",
+        file_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    if result.returncode != 0:
+        logger.warning("File validation failed for %s: %s", file_path, result.stderr[:200])
+        return False
+    try:
+        dur = float(result.stdout.strip())
+        if dur <= 0:
+            logger.warning("File validation failed for %s: duration is %s", file_path, dur)
+            return False
+    except (ValueError, TypeError):
+        logger.warning("File validation failed for %s: could not parse duration", file_path)
+        return False
+    return True
+
+
 def cut_segments(
     input_path: str,
     segments: list[dict],
@@ -51,6 +77,9 @@ def cut_segments(
 
     Segments are the parts to REMOVE. This function inverts them to get
     keep-ranges, then concatenates those ranges.
+
+    Writes to a temp file first and validates before replacing the original.
+    If validation fails, the original file is preserved.
 
     If output_path is None, overwrites the input file.
     Returns the final output path.
@@ -90,8 +119,6 @@ def cut_segments(
         len(merged), input_path, len(keep_ranges),
     )
 
-    # Determine if this is audio-only or video
-    is_audio = input_path.lower().endswith((".mp3", ".m4a", ".ogg", ".wav", ".flac", ".aac"))
     ext = os.path.splitext(input_path)[1]
 
     # Use temp dir for intermediate files
@@ -122,25 +149,27 @@ def cut_segments(
                 escaped = seg_path.replace("\\", "/").replace("'", "'\\''")
                 f.write(f"file '{escaped}'\n")
 
-        # Concat all segments
-        final_output = output_path or os.path.join(tmpdir, f"output{ext}")
+        # Concat to temp file (not directly to output)
+        temp_output = os.path.join(tmpdir, f"output{ext}")
         cmd = [
             "ffmpeg", "-y",
             "-f", "concat",
             "-safe", "0",
             "-i", list_path,
             "-c", "copy",
-            final_output,
+            temp_output,
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
         if result.returncode != 0:
             logger.error("ffmpeg concat failed: %s", result.stderr[:300])
             raise RuntimeError(f"ffmpeg concat failed: {result.stderr[:300]}")
 
-        # If no output_path was given, overwrite the original
-        if output_path is None:
-            import shutil
-            shutil.move(final_output, input_path)
-            return input_path
+        # Validate the output before replacing the original
+        if not validate_file(temp_output):
+            raise RuntimeError(f"Cut output failed validation for {input_path}")
 
-    return final_output
+        # Move validated output to final destination
+        import shutil
+        final = output_path or input_path
+        shutil.move(temp_output, final)
+        return final

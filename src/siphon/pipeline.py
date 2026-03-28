@@ -528,6 +528,16 @@ async def _download_youtube_episode(episode, resolved, config, db) -> None:
         path, size = result
         mime = "audio/mpeg" if resolved.mode == "audio" else "video/mp4"
 
+        # Validate downloaded file
+        from siphon.cutter import validate_file
+        is_valid = await loop.run_in_executor(None, validate_file, path)
+        if not is_valid:
+            logger.error("Downloaded file failed validation: %s/%s", feed_name, video_id)
+            log_activity(f"Download corrupt: {episode.get('title', video_id)[:50]}", feed=feed_name, level="error")
+            _delete_file(path)
+            db.update_episode_status(video_id, feed_name, "failed", error="Downloaded file corrupt (ffprobe validation failed)")
+            return
+
         # Get actual duration via ffprobe
         duration = await _get_file_duration(loop, path)
 
@@ -598,8 +608,18 @@ async def _download_podcast_episode(episode, resolved, config, db) -> None:
         None, download_podcast_audio, audio_url, output_path,
     )
 
-    # Get actual duration via ffprobe
+    # Validate downloaded file
     loop = asyncio.get_event_loop()
+    from siphon.cutter import validate_file
+    is_valid = await loop.run_in_executor(None, validate_file, output_path)
+    if not is_valid:
+        logger.error("Downloaded podcast file failed validation: %s/%s", feed_name, video_id)
+        log_activity(f"Download corrupt: {episode.get('title', video_id)[:50]}", feed=feed_name, level="error")
+        _delete_file(output_path)
+        db.update_episode_status(video_id, feed_name, "failed", error="Downloaded file corrupt (ffprobe validation failed)")
+        return
+
+    # Get actual duration via ffprobe
     duration = await _get_file_duration(loop, output_path)
 
     # Post-download filter: check duration
@@ -920,13 +940,25 @@ async def _process_one_claude(ep: dict, config: SiphonConfig, db: Database) -> N
             len(high_confidence), len(marginal),
         )
 
-        # Cut with ffmpeg
+        # Cut with ffmpeg — validate output, retry once, fall back to uncut if still bad
         ffmpeg_duration = 0.0
+        cut_failed = False
         if high_confidence and file_path:
             t0_ffmpeg = time.time()
-            await loop.run_in_executor(None, cut_segments, file_path, high_confidence)
-            ffmpeg_duration = time.time() - t0_ffmpeg
-            logger.info("Applied %d cuts to %s in %.1fs", len(high_confidence), file_path, ffmpeg_duration)
+            for attempt in range(2):
+                try:
+                    await loop.run_in_executor(None, cut_segments, file_path, high_confidence)
+                    ffmpeg_duration = time.time() - t0_ffmpeg
+                    logger.info("Applied %d cuts to %s in %.1fs", len(high_confidence), file_path, ffmpeg_duration)
+                    break
+                except RuntimeError as exc:
+                    if attempt == 0:
+                        logger.warning("Cut failed for %s, retrying: %s", file_path, exc)
+                    else:
+                        logger.error("Cut failed twice for %s, serving uncut: %s", file_path, exc)
+                        log_activity(f"LLM cut failed, serving uncut: {title[:40]}", feed=feed_name, level="warning")
+                        cut_failed = True
+                        high_confidence = []  # Record 0 cuts applied
 
         # Delete transcript file
         try:

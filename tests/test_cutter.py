@@ -57,11 +57,14 @@ class TestCutSegmentsMocked:
         result = cut_segments("/file.mp3", [])
         assert result == "/file.mp3"
 
+    @patch("shutil.move")
+    @patch("siphon.cutter.validate_file")
     @patch("siphon.cutter.get_duration")
     @patch("siphon.cutter.subprocess.run")
-    def test_calls_ffmpeg_for_segments(self, mock_run, mock_duration):
+    def test_calls_ffmpeg_for_segments(self, mock_run, mock_duration, mock_validate, mock_move):
         mock_duration.return_value = 600.0
         mock_run.return_value = MagicMock(returncode=0, stderr="")
+        mock_validate.return_value = True
 
         result = cut_segments(
             "/tmp/test.mp3",
@@ -72,6 +75,8 @@ class TestCutSegmentsMocked:
         assert result == "/tmp/output.mp3"
         # Should have called ffmpeg multiple times (segment extraction + concat)
         assert mock_run.call_count >= 2
+        # Should have validated the output
+        mock_validate.assert_called_once()
 
 
 # ------------------------------------------------------------------ #

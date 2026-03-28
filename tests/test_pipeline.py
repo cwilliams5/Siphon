@@ -248,10 +248,11 @@ class TestCheckFeeds:
 
 
 class TestProcessDownloads:
+    @patch("siphon.cutter.validate_file", return_value=True)
     @patch("siphon.pipeline.find_downloaded_file")
     @patch("siphon.pipeline.download_video")
     async def test_process_downloads_downloads_eligible(
-        self, mock_download, mock_find, config, db, download_dir
+        self, mock_download, mock_find, mock_validate, config, db, download_dir
     ):
         # Insert an eligible episode
         db.insert_episode(
