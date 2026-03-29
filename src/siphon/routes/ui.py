@@ -269,7 +269,7 @@ def _get_feed_display(request: Request) -> list[dict]:
     return feeds_display
 
 
-def _get_system_status(config: SiphonConfig, db: Database) -> dict:
+def _get_system_status(config: SiphonConfig, db: Database, app=None) -> dict:
     """Build a summary dict of system-wide status for the dashboard."""
     from siphon.activity import get_active_counts, get_pause_state
 
@@ -288,6 +288,23 @@ def _get_system_status(config: SiphonConfig, db: Database) -> dict:
         "FROM episodes"
     ).fetchone()
 
+    # Get next run times from scheduler
+    next_feed_check = ""
+    next_dl_check = ""
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(config.server.timezone)
+        if app and hasattr(app.state, 'scheduler'):
+            scheduler = app.state.scheduler
+            feed_job = scheduler.get_job('check_feeds')
+            dl_job = scheduler.get_job('process_downloads')
+            if feed_job and feed_job.next_run_time:
+                next_feed_check = feed_job.next_run_time.astimezone(tz).strftime("%H:%M")
+            if dl_job and dl_job.next_run_time:
+                next_dl_check = dl_job.next_run_time.astimezone(tz).strftime("%H:%M")
+    except Exception:
+        pass
+
     return {
         "youtube_downloads_this_hour": yt_recent,
         "youtube_downloads_max": sched.youtube_max_downloads_per_hour,
@@ -301,7 +318,11 @@ def _get_system_status(config: SiphonConfig, db: Database) -> dict:
         "active_dl": active.get("download", 0),
         "active_whisper": active.get("whisper", 0),
         "active_claude": active.get("claude", 0),
+        "checking_feeds": active.get("checking_feeds", 0) > 0,
+        "checking_downloads": active.get("checking_downloads", 0) > 0,
         "pause_state": get_pause_state(),
+        "next_feed_check": next_feed_check,
+        "next_dl_check": next_dl_check,
     }
 
 
@@ -342,27 +363,25 @@ async def set_whisper_workers(request: Request, workers: int = Form(1)):
 
 @router.get("/activity-log-data")
 async def activity_log_data(request: Request):
-    from siphon.activity import get_recent, get_status as get_activity_status
+    from siphon.activity import get_recent
     config = request.app.state.config
     db = request.app.state.db
     return JSONResponse({
-        "status": get_activity_status()["text"],
-        "system": _get_system_status(config, db),
+        "system": _get_system_status(config, db, request.app),
         "entries": get_recent(200),
     })
 
 
 @router.get("/activity-log", response_class=HTMLResponse)
 async def activity_log_page(request: Request):
-    from siphon.activity import get_recent, get_status as get_activity_status
+    from siphon.activity import get_recent
     config = request.app.state.config
     db = request.app.state.db
-    status_info = get_activity_status()
     return templates.TemplateResponse("activity_log.html", {
         "request": request,
         "activity_log": get_recent(50),
-        "status": _get_system_status(config, db),
-        "current_status": status_info["text"],
+        "status": _get_system_status(config, db, request.app),
+        "current_status": "See activity footer",
     })
 
 
@@ -382,7 +401,7 @@ async def stats_page(request: Request):
         sum(f["episode_counts"].values()) for f in feeds
     )
 
-    status = _get_system_status(config, db)
+    status = _get_system_status(config, db, request.app)
 
     agg = db.conn.execute(
         "SELECT "
@@ -532,9 +551,6 @@ async def feeds_page(request: Request):
 async def check_now(request: Request):
     import asyncio
     import logging
-    from datetime import timedelta
-    from zoneinfo import ZoneInfo
-    from siphon.activity import set_status
     from siphon.pipeline import check_feeds, process_downloads
 
     logger = logging.getLogger(__name__)
@@ -554,10 +570,6 @@ async def check_now(request: Request):
             logger.info("Manual download processing completed")
         except Exception as e:
             logger.error("Manual feed check failed: %s", e, exc_info=True)
-        finally:
-            tz = ZoneInfo(config.server.timezone)
-            next_time = (datetime.now(tz) + timedelta(minutes=config.schedule.check_interval_minutes)).strftime("%H:%M:%S")
-            set_status(f"Idle \u2014 next check at {next_time}")
 
     # Keep a strong reference so the task isn't garbage-collected mid-flight.
     task = asyncio.create_task(_check_with_logging())

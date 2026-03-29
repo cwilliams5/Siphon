@@ -8,9 +8,6 @@ from zoneinfo import ZoneInfo
 _log: deque[dict] = deque(maxlen=1000)
 _lock = threading.Lock()
 
-_current_status = {"text": "Idle", "updated": ""}
-_status_lock = threading.Lock()
-
 _tz_name: str = "America/Los_Angeles"
 
 
@@ -22,16 +19,6 @@ def set_timezone(tz: str) -> None:
 def _now_local() -> str:
     return datetime.now(ZoneInfo(_tz_name)).strftime("%H:%M:%S")
 
-
-def set_status(text: str) -> None:
-    with _status_lock:
-        _current_status["text"] = text
-        _current_status["updated"] = _now_local()
-
-
-def get_status() -> dict:
-    with _status_lock:
-        return dict(_current_status)
 
 def log_activity(message: str, feed: str = "", level: str = "info") -> None:
     """Add an activity entry."""

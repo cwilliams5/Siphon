@@ -24,7 +24,7 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 
-from siphon.activity import check_paused, log_activity, set_status, worker_start, worker_done
+from siphon.activity import check_paused, log_activity, worker_start, worker_done
 from siphon.config import SiphonConfig, resolve_feed
 from siphon.db import Database
 from siphon.downloader import (
@@ -111,7 +111,7 @@ def _delete_file(path: str) -> None:
 
 async def check_feeds(config: SiphonConfig, db: Database) -> None:
     """Discover new episodes from the next batch of feeds."""
-    set_status("Checking feeds...")
+    worker_start("checking_feeds")
     log_activity("Starting feed check")
 
     for feed_type, limit in (
@@ -163,6 +163,7 @@ async def check_feeds(config: SiphonConfig, db: Database) -> None:
         except Exception as exc:
             logger.warning("Pocket Casts auto-prune failed: %s", exc)
 
+    worker_done("checking_feeds")
     log_activity("Feed check complete")
 
 
@@ -499,7 +500,7 @@ async def process_downloads(config: SiphonConfig, db: Database) -> None:
 
 async def _process_downloads_inner(config: SiphonConfig, db: Database) -> None:
     """Inner download processing — runs under _download_lock."""
-    set_status("Processing downloads...")
+    worker_start("checking_downloads")
 
     _downloaded: set = set()  # track episodes downloaded this cycle
 
@@ -562,7 +563,6 @@ async def _process_downloads_inner(config: SiphonConfig, db: Database) -> None:
 
                 resolved = resolve_feed(feed_config, config.defaults)
                 db.update_episode_status(video_id, feed_name, "downloading")
-                set_status(f"Downloading {title[:40]}...")
                 log_activity(f"Downloading {title[:50]}", feed=feed_name)
                 worker_start("download")
 
@@ -586,6 +586,7 @@ async def _process_downloads_inner(config: SiphonConfig, db: Database) -> None:
                     worker_done("download")
 
     await _prune_disk(config, db)
+    worker_done("checking_downloads")
 
 
 async def _download_youtube_episode(episode, resolved, config, db) -> None:
@@ -791,7 +792,6 @@ async def _process_one_whisper(ep: dict, config: SiphonConfig, db: Database) -> 
         )
         return
 
-    set_status(f"Whisper: {title[:40]}...")
     log_activity(f"Whisper: transcribing {title[:50]}", feed=feed_name)
     worker_start("whisper")
 
@@ -931,7 +931,6 @@ async def _process_claude_inner(config: SiphonConfig, db: Database) -> None:
             tasks.append(asyncio.create_task(_do()))
 
         if tasks:
-            set_status(f"Claude: {len(tasks)} active...")
             results = await asyncio.gather(*tasks, return_exceptions=True)
             for r in results:
                 if isinstance(r, Exception):
@@ -968,7 +967,6 @@ async def _process_one_claude(ep: dict, config: SiphonConfig, db: Database) -> N
     resolved = resolve_feed(feed_config, config.defaults)
 
     log_activity(f"Claude: processing {title[:50]}", feed=feed_name)
-    set_status(f"Claude: {title[:40]}...")
     db.update_episode_status(video_id, feed_name, "pending_claude", llm_trim_status="pending")
     worker_start("claude")
 

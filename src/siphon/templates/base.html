@@ -509,12 +509,34 @@
       }
     })();
 
+    function buildStatusLine(sys) {
+      /* Priority: Paused > Active workers > Checking jobs > Idle */
+      if (sys.pause_state && sys.pause_state !== 'running') {
+        return 'Paused';
+      }
+      var parts = [];
+      if (sys.active_dl > 0) parts.push('Downloading' + (sys.active_dl > 1 ? ' (' + sys.active_dl + ')' : ''));
+      if (sys.active_whisper > 0) parts.push('Whisper processing' + (sys.active_whisper > 1 ? ' (' + sys.active_whisper + ')' : ''));
+      if (sys.active_claude > 0) parts.push('Claude processing' + (sys.active_claude > 1 ? ' (' + sys.active_claude + ')' : ''));
+      if (parts.length > 0) return parts.join(' + ');
+      var checks = [];
+      if (sys.checking_feeds) checks.push('Feeds');
+      if (sys.checking_downloads) checks.push('Downloads');
+      if (checks.length > 0) return 'Checking ' + checks.join(' + ');
+      var idle = 'Idle';
+      var times = [];
+      if (sys.next_feed_check) times.push('Feed ' + sys.next_feed_check);
+      if (sys.next_dl_check) times.push('DL ' + sys.next_dl_check);
+      if (times.length > 0) idle += ' \u2014 Next: ' + times.join(', ');
+      return idle;
+    }
+
     function fetchActivityLog() {
       fetch('/ui/activity-log-data')
         .then(function(r) { return r.json(); })
         .then(function(data) {
-          document.getElementById('activity-status').textContent = data.status || 'Idle';
           var sys = data.system || {};
+          document.getElementById('activity-status').textContent = buildStatusLine(sys);
           var barHtml = '';
           if (sys.pause_state && sys.pause_state !== 'running') {
             barHtml += '<span style="color:var(--warning);">[' + sys.pause_state.replace('_', ' ') + ']</span>';

@@ -58,7 +58,7 @@ def create_app(config: SiphonConfig) -> FastAPI:
         scheduler = None
         try:
             from apscheduler.schedulers.asyncio import AsyncIOScheduler
-            from siphon.activity import check_paused, set_status, _now_local
+            from siphon.activity import check_paused
             from siphon.pipeline import (
                 check_feeds, process_downloads,
                 process_whisper, process_claude,
@@ -81,14 +81,12 @@ def create_app(config: SiphonConfig) -> FastAPI:
                     return
                 _reload_config()
                 await check_feeds(app.state.config, app.state.db)
-                _set_idle_with_next_check(app.state.config)
 
             async def _scheduled_process_downloads():
                 if check_paused():
                     return
                 _reload_config()
                 await process_downloads(app.state.config, app.state.db)
-                _set_idle_with_next_check(app.state.config)
 
             async def _scheduled_process_whisper():
                 if check_paused():
@@ -99,12 +97,6 @@ def create_app(config: SiphonConfig) -> FastAPI:
                 if check_paused():
                     return
                 await process_claude(app.state.config, app.state.db)
-
-            def _set_idle_with_next_check(cfg):
-                from zoneinfo import ZoneInfo
-                tz = ZoneInfo(cfg.server.timezone)
-                next_time = (datetime.now(tz) + timedelta(minutes=cfg.schedule.check_interval_minutes)).strftime("%H:%M:%S")
-                set_status(f"Idle \u2014 next check at {next_time}")
 
             scheduler = AsyncIOScheduler()
             scheduler.add_job(
