@@ -833,22 +833,24 @@ def _compute_insights(db: Database, config) -> dict:
     # Queue hogs — top 3 feeds with most episodes in pipeline
     queue_rows = db.conn.execute(
         "SELECT feed_name, "
-        "  SUM(CASE WHEN status IN ('pending', 'eligible', 'downloading') THEN 1 ELSE 0 END) AS dl, "
+        "  SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS sb, "
+        "  SUM(CASE WHEN status IN ('eligible', 'downloading') THEN 1 ELSE 0 END) AS dl, "
         "  SUM(CASE WHEN status = 'pending_whisper' THEN 1 ELSE 0 END) AS whisper, "
         "  SUM(CASE WHEN status = 'pending_claude' THEN 1 ELSE 0 END) AS claude "
         "FROM episodes "
         "WHERE status IN ('pending', 'eligible', 'downloading', 'pending_whisper', 'pending_claude') "
         "GROUP BY feed_name "
-        "ORDER BY (dl + whisper + claude) DESC "
+        "ORDER BY (sb + dl + whisper + claude) DESC "
         "LIMIT 3"
     ).fetchall()
     queue_hogs = []
     for row in queue_rows:
-        total = row["dl"] + row["whisper"] + row["claude"]
+        total = row["sb"] + row["dl"] + row["whisper"] + row["claude"]
         if total > 0:
             queue_hogs.append({
                 "name": display_names.get(row["feed_name"], row["feed_name"]),
                 "total": total,
+                "sb": row["sb"],
                 "dl": row["dl"],
                 "whisper": row["whisper"],
                 "claude": row["claude"],

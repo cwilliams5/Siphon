@@ -201,7 +201,7 @@ testCookies();
   <div class="card insight-card" style="padding:12px; border-left:3px solid var(--warning);">
     <div class="insight-title"><i data-lucide="layers" style="width:14px;height:14px;"></i> Queue Backlog</div>
     {% for item in insights.queue_hogs %}
-    <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.total }} (DL {{ item.dl }} | W {{ item.whisper }} | C {{ item.claude }})</div>
+    <div class="insight-entry" style="opacity:{{ 1.0 - loop.index0 * 0.15 }};">{{ item.name }} &mdash; {{ item.total }} (SB {{ item.sb }} | DL {{ item.dl }} | W {{ item.whisper }} | C {{ item.claude }})</div>
     {% endfor %}
   </div>
   {% endif %}
