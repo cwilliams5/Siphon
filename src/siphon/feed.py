@@ -189,8 +189,15 @@ def generate_feed_xml(
         _text(item, "pubDate", format_pubdate(ep.get("upload_date")))
 
         mime = ep.get("mime_type", "video/mp4")
-        ext = get_file_extension(mime)
-        enc_url = f"{_media_base}/media/{feed_name}/{ep.get('video_id', '')}.{ext}"
+        # Use actual filename from file_path (handles both old and new naming)
+        file_path = ep.get("file_path", "")
+        if file_path:
+            import os
+            actual_filename = os.path.basename(file_path)
+        else:
+            ext = get_file_extension(mime)
+            actual_filename = f"{ep.get('video_id', '')}.{ext}"
+        enc_url = f"{_media_base}/media/{feed_name}/{actual_filename}"
         ET.SubElement(
             item,
             "enclosure",

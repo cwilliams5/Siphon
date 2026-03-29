@@ -174,8 +174,8 @@ def episode_filename(guid: str, audio_url: str) -> str:
     if ext not in (".mp3", ".m4a", ".ogg", ".aac", ".wav"):
         ext = ".mp3"  # default
 
-    # Slugify the GUID
-    slug = re.sub(r"[^\w-]", "_", guid)[:80]
+    # Slugify the GUID — cap at 120 chars (safe for all filesystems)
+    slug = re.sub(r"[^\w-]", "_", guid)[:120]
     return f"{slug}{ext}"
 
 

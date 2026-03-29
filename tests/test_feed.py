@@ -47,6 +47,7 @@ def _sample_episodes() -> list[dict]:
             upload_date="20240215",
             duration=5400,
             file_size=200000000,
+            file_path="/media/tech/vid1.mp4",
         ),
         _make_episode(
             video_id="vid2",
@@ -54,6 +55,7 @@ def _sample_episodes() -> list[dict]:
             upload_date="20240115",
             duration=3600,
             file_size=150000000,
+            file_path="/media/tech/vid2.mp4",
         ),
     ]
 
@@ -217,8 +219,27 @@ class TestGenerateFeedXml:
         assert enc.attrib["length"] == "200000000"
         assert enc.attrib["type"] == "video/mp4"
 
+    def test_item_enclosure_uses_actual_filename(self):
+        """Enclosure URL should use the actual filename from file_path, not reconstruct from video_id."""
+        episodes = [_make_episode(
+            video_id="some-long-guid-that-would-be-sanitized",
+            file_path="/media/tech/some-long-guid-that-would-be-s.mp4",
+        )]
+        xml_str = generate_feed_xml("tech", episodes, "http://localhost:8000")
+        root = ET.fromstring(xml_str)
+        enc = root.find("channel/item/enclosure")
+        assert enc.attrib["url"] == "http://localhost:8000/media/tech/some-long-guid-that-would-be-s.mp4"
+
+    def test_item_enclosure_fallback_without_file_path(self):
+        """Without file_path, should fall back to video_id.ext construction."""
+        episodes = [_make_episode(video_id="vid1", file_path="")]
+        xml_str = generate_feed_xml("tech", episodes, "http://localhost:8000")
+        root = ET.fromstring(xml_str)
+        enc = root.find("channel/item/enclosure")
+        assert enc.attrib["url"] == "http://localhost:8000/media/tech/vid1.mp4"
+
     def test_item_enclosure_mp3(self):
-        episodes = [_make_episode(mime_type="audio/mpeg")]
+        episodes = [_make_episode(mime_type="audio/mpeg", file_path="/media/tech/abc123.mp3")]
         xml_str = generate_feed_xml("tech", episodes, "http://localhost:8000")
         root = ET.fromstring(xml_str)
         enc = root.find("channel/item/enclosure")
