@@ -15,9 +15,9 @@ def is_short(entry: dict) -> str | None:
         return "short"
 
     duration = entry.get("duration")
+    if duration is not None and duration == 0:
+        return "duration_unknown"  # Likely a livestream — re-evaluate later
     if duration is not None and duration < 60:
-        # A sub-60-second video is assumed to be a Short unless the title
-        # hints that it is intentionally a regular (non-Short) upload.
         return "short"
 
     return None
@@ -38,10 +38,10 @@ def title_excluded(title: str, exclude_patterns: list[str]) -> str | None:
 def too_short(duration: int | None, min_duration: int) -> str | None:
     """Return ``"too_short"`` if *duration* is below the minimum.
 
-    If *duration* is ``None`` the check is deferred (we cannot know yet),
-    so the entry passes.
+    If *duration* is ``None`` or ``0`` the check is deferred (we cannot
+    know yet), so the entry passes.
     """
-    if duration is None:
+    if duration is None or duration == 0:
         return None
     if duration < min_duration:
         return "too_short"

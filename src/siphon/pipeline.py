@@ -166,6 +166,78 @@ async def check_feeds(config: SiphonConfig, db: Database) -> None:
     log_activity("Feed check complete")
 
 
+async def _reevaluate_duration_unknown(resolved, config, db) -> None:
+    """Re-check episodes filtered as duration_unknown (likely livestreams).
+
+    If the video now has a real duration, run filters again and either
+    unfilter it or reclassify. Give up after 72 hours.
+    """
+    from siphon.youtube import _api_get, _parse_iso8601_duration, VIDEOS_URL
+
+    episodes = db.conn.execute(
+        "SELECT video_id, discovered_at FROM episodes "
+        "WHERE feed_name = ? AND status = 'filtered' AND filter_reason = 'duration_unknown'",
+        (resolved.name,),
+    ).fetchall()
+
+    if not episodes:
+        return
+
+    api_key = config.youtube.api_key
+    cooldown_hours = config.youtube.quota_cooldown_hours
+    loop = asyncio.get_event_loop()
+
+    # Check age — give up after 72 hours
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=72)).strftime("%Y-%m-%d %H:%M:%S")
+    stale = [ep for ep in episodes if (ep["discovered_at"] or "") < cutoff]
+    fresh = [ep for ep in episodes if ep not in stale]
+
+    # Mark stale ones as permanently filtered
+    for ep in stale:
+        db.update_episode_status(ep["video_id"], resolved.name, "filtered", filter_reason="stale_livestream")
+        logger.info("Gave up on duration_unknown %s/%s after 72h", resolved.name, ep["video_id"])
+
+    if not fresh:
+        return
+
+    # Batch-fetch durations for fresh ones
+    video_ids = [ep["video_id"] for ep in fresh]
+    try:
+        data = await loop.run_in_executor(None, _api_get, VIDEOS_URL, {
+            "key": api_key,
+            "id": ",".join(video_ids),
+            "part": "contentDetails",
+        }, cooldown_hours)
+    except Exception as exc:
+        logger.warning("Failed to re-check duration_unknown: %s", exc)
+        return
+
+    for item in data.get("items", []):
+        vid = item["id"]
+        raw_dur = item.get("contentDetails", {}).get("duration", "")
+        duration = _parse_iso8601_duration(raw_dur)
+
+        if duration == 0:
+            continue  # Still live or no duration, try again next cycle
+
+        # Re-run filters with the real duration
+        entry = {"id": vid, "duration": duration, "url": f"https://www.youtube.com/watch?v={vid}"}
+        reason = apply_filters(
+            entry, resolved.block_shorts, resolved.title_exclude,
+            resolved.min_duration_seconds, None,  # skip date_cutoff, already passed
+        )
+
+        if reason:
+            db.update_episode_status(vid, resolved.name, "filtered", filter_reason=reason, duration=duration)
+            logger.info("Re-evaluated %s/%s: filtered (%s, %ds)", resolved.name, vid, reason, duration)
+        else:
+            # Unfilter — set to pending for download
+            eligible_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            db.update_episode_status(vid, resolved.name, "pending", duration=duration, eligible_at=eligible_at)
+            logger.info("Re-evaluated %s/%s: now eligible (%ds)", resolved.name, vid, duration)
+            log_activity(f"Livestream VOD now available: {vid}", feed=resolved.name)
+
+
 def _normalize_youtube_url(url: str) -> str:
     """Ensure a YouTube channel URL points to the /videos tab."""
     # Strip trailing slash
@@ -209,6 +281,9 @@ async def _check_youtube_feed(resolved, config, db) -> None:
         )
         if meta.get("image_url"):
             db.update_feed_image(resolved.name, meta["image_url"])
+
+    # Re-evaluate duration_unknown episodes (livestreams that may now be VODs)
+    await _reevaluate_duration_unknown(resolved, config, db)
 
     # Get known video IDs for this feed to detect where to stop
     # Exclude filtered episodes — they shouldn't block paging to older content
