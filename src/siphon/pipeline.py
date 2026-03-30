@@ -1066,11 +1066,11 @@ async def _process_one_claude(ep: dict, config: SiphonConfig, db: Database) -> N
         if file_path and os.path.exists(file_path):
             new_size = os.path.getsize(file_path)
 
-        # Build audit data
+        # Build audit data (full segment dicts for Time Saved calculation)
         audit = {
             "segments": all_segments,
-            "high_confidence": [s.get("label", "") for s in high_confidence],
-            "marginal": [s.get("label", "") for s in marginal],
+            "high_confidence": high_confidence,
+            "marginal": marginal,
         }
 
         update_kwargs = {
