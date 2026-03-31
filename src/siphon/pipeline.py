@@ -201,6 +201,9 @@ async def _reevaluate_duration_unknown(resolved, config, db) -> None:
     if not fresh:
         return
 
+    # Build title lookup from DB for re-filtering
+    all_eps = {ep["video_id"]: ep for ep in db.get_episodes_by_feed(resolved.name)}
+
     # Batch-fetch durations for fresh ones
     video_ids = [ep["video_id"] for ep in fresh]
     try:
@@ -221,8 +224,10 @@ async def _reevaluate_duration_unknown(resolved, config, db) -> None:
         if duration == 0:
             continue  # Still live or no duration, try again next cycle
 
-        # Re-run filters with the real duration
-        entry = {"id": vid, "duration": duration, "url": f"https://www.youtube.com/watch?v={vid}"}
+        # Re-run filters with the real duration and original title
+        db_ep = all_eps.get(vid, {})
+        entry = {"id": vid, "duration": duration, "url": f"https://www.youtube.com/watch?v={vid}",
+                 "title": db_ep.get("title", "")}
         reason = apply_filters(
             entry, resolved.block_shorts, resolved.title_exclude,
             resolved.min_duration_seconds, None,  # skip date_cutoff, already passed
