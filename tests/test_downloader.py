@@ -128,13 +128,13 @@ class TestBuildDownloadOptsVideo:
         self, video_feed: ResolvedFeed, cookies: CookiesConfig
     ) -> None:
         opts = build_download_opts(video_feed, cookies, "/tmp/dl")
-        assert opts["format"] == "bestvideo[height<=1080]+bestaudio/best"
+        assert opts["format"] == "bestvideo[height<=1080]+bestaudio/best[height<=1080][vcodec!=none]"
 
     def test_format_string_max_quality(
         self, max_quality_feed: ResolvedFeed, cookies: CookiesConfig
     ) -> None:
         opts = build_download_opts(max_quality_feed, cookies, "/tmp/dl")
-        assert opts["format"] == "bestvideo+bestaudio/best"
+        assert opts["format"] == "bestvideo+bestaudio/best[vcodec!=none]"
 
     def test_merge_output_format(
         self, video_feed: ResolvedFeed, cookies: CookiesConfig

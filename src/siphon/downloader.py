@@ -36,9 +36,9 @@ def build_download_opts(
 
     if feed.mode == "video":
         if feed.quality == "max":
-            fmt = "bestvideo+bestaudio/best"
+            fmt = "bestvideo+bestaudio/best[vcodec!=none]"
         else:
-            fmt = f"bestvideo[height<={feed.quality}]+bestaudio/best"
+            fmt = f"bestvideo[height<={feed.quality}]+bestaudio/best[height<={feed.quality}][vcodec!=none]"
         opts: dict = {
             "format": fmt,
             "merge_output_format": "mp4",

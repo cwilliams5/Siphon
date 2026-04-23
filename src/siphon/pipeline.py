@@ -613,7 +613,7 @@ async def _download_youtube_episode(episode, resolved, config, db) -> None:
         mime = "audio/mpeg" if resolved.mode == "audio" else "video/mp4"
 
         # Validate downloaded file
-        from siphon.cutter import validate_file
+        from siphon.cutter import validate_file, has_real_video_stream
         is_valid = await loop.run_in_executor(None, validate_file, path)
         if not is_valid:
             logger.error("Downloaded file failed validation: %s/%s", feed_name, video_id)
@@ -621,6 +621,22 @@ async def _download_youtube_episode(episode, resolved, config, db) -> None:
             _delete_file(path)
             db.update_episode_status(video_id, feed_name, "failed", error="Downloaded file corrupt (ffprobe validation failed)")
             return
+
+        # For video feeds, verify the file has a real video stream (not just an embedded thumbnail).
+        # yt-dlp's /best fallback can silently produce audio-only files with the thumbnail attached
+        # as a fake PNG video track.
+        if resolved.mode == "video":
+            has_video = await loop.run_in_executor(None, has_real_video_stream, path)
+            if not has_video:
+                logger.error("Downloaded file has no real video stream: %s/%s", feed_name, video_id)
+                log_activity(f"Download audio-only (expected video): {episode.get('title', video_id)[:50]}", feed=feed_name, level="error")
+                _delete_file(path)
+                db.update_episode_status(
+                    video_id, feed_name, "failed",
+                    error="Downloaded file has no real video stream (got audio-only with embedded thumbnail)",
+                    retry_count=episode["retry_count"] + 1,
+                )
+                return
 
         # Get actual duration via ffprobe
         duration = await _get_file_duration(loop, path)

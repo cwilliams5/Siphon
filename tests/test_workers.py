@@ -177,11 +177,12 @@ class TestRecoverInterrupted:
 
 
 class TestDownloadWorkerLLMRouting:
+    @patch("siphon.cutter.has_real_video_stream", return_value=True)
     @patch("siphon.cutter.validate_file", return_value=True)
     @patch("siphon.pipeline.find_downloaded_file")
     @patch("siphon.pipeline.download_video")
     async def test_download_sets_pending_whisper_when_llm_trim(
-        self, mock_download, mock_find, mock_validate, config, db, download_dir
+        self, mock_download, mock_find, mock_validate, mock_has_video, config, db, download_dir
     ):
         """When llm_trim is enabled, download should set status to pending_whisper."""
         db.insert_episode(
@@ -201,11 +202,12 @@ class TestDownloadWorkerLLMRouting:
         ep = db.get_episode("vid001", "llm-feed")
         assert ep["status"] == "pending_whisper"
 
+    @patch("siphon.cutter.has_real_video_stream", return_value=True)
     @patch("siphon.cutter.validate_file", return_value=True)
     @patch("siphon.pipeline.find_downloaded_file")
     @patch("siphon.pipeline.download_video")
     async def test_download_sets_done_when_no_llm_trim(
-        self, mock_download, mock_find, mock_validate, config, db, download_dir
+        self, mock_download, mock_find, mock_validate, mock_has_video, config, db, download_dir
     ):
         """When llm_trim is NOT enabled, download should set status to done."""
         db.insert_episode(

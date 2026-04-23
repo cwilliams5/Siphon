@@ -8,7 +8,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from siphon.cutter import cut_segments, extract_audio, get_duration
+from siphon.cutter import cut_segments, extract_audio, get_duration, has_real_video_stream
 
 
 def _has_ffmpeg() -> bool:
@@ -50,6 +50,45 @@ class TestGetDurationMocked:
         mock_run.return_value = MagicMock(returncode=0, stdout="123.456\n", stderr="")
         duration = get_duration("/file.mp3")
         assert duration == pytest.approx(123.456)
+
+
+class TestHasRealVideoStreamMocked:
+    @patch("siphon.cutter.subprocess.run")
+    def test_real_h264_video(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="h264,27000\n", stderr="")
+        assert has_real_video_stream("/file.mp4") is True
+
+    @patch("siphon.cutter.subprocess.run")
+    def test_vp9_video_unknown_frame_count(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="vp9,N/A\n", stderr="")
+        assert has_real_video_stream("/file.mp4") is True
+
+    @patch("siphon.cutter.subprocess.run")
+    def test_png_thumbnail_only(self, mock_run):
+        # The matt-mcmuscles shape: PNG "video" with 7 frames
+        mock_run.return_value = MagicMock(returncode=0, stdout="png,7\n", stderr="")
+        assert has_real_video_stream("/file.mp4") is False
+
+    @patch("siphon.cutter.subprocess.run")
+    def test_mjpeg_thumbnail_only(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="mjpeg,1\n", stderr="")
+        assert has_real_video_stream("/file.mp4") is False
+
+    @patch("siphon.cutter.subprocess.run")
+    def test_no_video_stream_at_all(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        assert has_real_video_stream("/file.mp3") is False
+
+    @patch("siphon.cutter.subprocess.run")
+    def test_png_plus_real_video(self, mock_run):
+        # Real video with an attached thumbnail — must detect the real one
+        mock_run.return_value = MagicMock(returncode=0, stdout="png,1\nh264,27000\n", stderr="")
+        assert has_real_video_stream("/file.mp4") is True
+
+    @patch("siphon.cutter.subprocess.run")
+    def test_ffprobe_failure(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
+        assert has_real_video_stream("/file.mp4") is False
 
 
 class TestCutSegmentsMocked:

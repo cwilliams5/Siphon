@@ -68,6 +68,44 @@ def validate_file(file_path: str) -> bool:
     return True
 
 
+_THUMBNAIL_CODECS = {"png", "mjpeg", "bmp", "gif", "tiff", "webp"}
+
+
+def has_real_video_stream(file_path: str) -> bool:
+    """Return True if the file has a real (non-thumbnail) video stream.
+
+    Detects the audio-only-with-embedded-thumbnail shape that yt-dlp's
+    `/best` fallback can produce: an mp4 container with opus audio and
+    a PNG cover image masquerading as a video stream (codec=png,
+    nb_frames typically 1-10).
+    """
+    cmd = [
+        "ffprobe", "-v", "error",
+        "-select_streams", "v",
+        "-show_entries", "stream=codec_name,nb_frames",
+        "-of", "csv=p=0",
+        file_path,
+    ]
+    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    if result.returncode != 0:
+        return False
+    for line in result.stdout.strip().split("\n"):
+        if not line.strip():
+            continue
+        parts = line.split(",")
+        codec = parts[0].strip().lower()
+        if codec in _THUMBNAIL_CODECS:
+            continue
+        try:
+            nb_frames = int(parts[1]) if len(parts) > 1 and parts[1].strip() not in ("", "N/A") else -1
+        except ValueError:
+            nb_frames = -1
+        # Real video: known video codec + either unknown frame count (streaming) or > 10 frames
+        if nb_frames == -1 or nb_frames > 10:
+            return True
+    return False
+
+
 def normalize_timestamps(file_path: str) -> bool:
     """Normalize a media file's timestamps to start at zero.
 
