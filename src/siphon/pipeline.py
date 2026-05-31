@@ -760,6 +760,15 @@ async def _download_podcast_episode(episode, resolved, config, db) -> None:
 # Worker 2: Whisper transcription
 # ---------------------------------------------------------------------- #
 
+# Hard ceiling on a single transcription. A healthy GPU base/large transcribe
+# finishes well inside this even for multi-hour episodes; blowing past it means
+# the call is hung (the leading suspect for the "everything skipped after a
+# week" degradation). NOTE: run_in_executor threads cannot be cancelled, so a
+# true hang still leaks one worker thread — the resource snapshot's thread count
+# is what reveals that. The timeout's job here is to surface the hang in the log
+# and let the episode retry instead of stalling the whole queue forever.
+WHISPER_TIMEOUT_SECONDS = 7200  # 2 hours
+
 _whisper_lock = asyncio.Lock()
 
 
@@ -841,11 +850,15 @@ async def _process_one_whisper(ep: dict, config: SiphonConfig, db: Database) -> 
                 raise
 
         try:
-            # Step 2: Transcribe
-            transcript = await loop.run_in_executor(
-                None, transcribe, whisper_input,
-                config.llm.whisper_model, config.llm.whisper_device,
-                config.llm.whisper_word_timestamps, config.llm.whisper_workers,
+            # Step 2: Transcribe (hard timeout surfaces a hung GPU/CTranslate2
+            # call instead of letting it stall the queue indefinitely)
+            transcript = await asyncio.wait_for(
+                loop.run_in_executor(
+                    None, transcribe, whisper_input,
+                    config.llm.whisper_model, config.llm.whisper_device,
+                    config.llm.whisper_word_timestamps, config.llm.whisper_workers,
+                ),
+                timeout=WHISPER_TIMEOUT_SECONDS,
             )
         finally:
             if temp_audio is not None:
@@ -888,7 +901,10 @@ async def _process_one_whisper(ep: dict, config: SiphonConfig, db: Database) -> 
         )
 
     except Exception as exc:
-        logger.error("Whisper failed for %s/%s: %s", feed_name, video_id, exc)
+        # logger.exception captures the full traceback to the file log — the
+        # exception *type* (CUDA OOM vs subprocess spawn fail vs timeout) is the
+        # key clue for the "everything skipped" hunt.
+        logger.exception("Whisper failed for %s/%s", feed_name, video_id)
         log_activity(f"Whisper failed: {str(exc)[:80]}", feed=feed_name, level="error")
         retry_count = (ep.get("llm_retry_count") or 0) + 1
         if retry_count >= 3:
@@ -896,6 +912,7 @@ async def _process_one_whisper(ep: dict, config: SiphonConfig, db: Database) -> 
                 video_id, feed_name, "done",
                 llm_trim_status="skipped",
                 llm_retry_count=retry_count,
+                error=f"Whisper skipped after {retry_count} failures: {exc}",
             )
             log_activity(f"Whisper: skipped after {retry_count} failures", feed=feed_name, level="warning")
         else:
@@ -1114,7 +1131,9 @@ async def _process_one_claude(ep: dict, config: SiphonConfig, db: Database) -> N
             log_activity(f"ffmpeg: cut applied ({_fmt_ffmpeg})", feed=feed_name)
 
     except Exception as exc:
-        logger.error("Claude failed for %s/%s: %s", feed_name, video_id, exc)
+        # Full traceback to the file log — the exception type pins down whether
+        # the Claude CLI subprocess failed to spawn, timed out, or returned junk.
+        logger.exception("Claude failed for %s/%s", feed_name, video_id)
         log_activity(f"Claude failed: {str(exc)[:80]}", feed=feed_name, level="error")
         new_retry = retry_count + 1
         if new_retry >= 3:
@@ -1127,6 +1146,7 @@ async def _process_one_claude(ep: dict, config: SiphonConfig, db: Database) -> N
                 video_id, feed_name, "done",
                 llm_trim_status="skipped",
                 llm_retry_count=new_retry,
+                error=f"Claude skipped after {new_retry} failures: {exc}",
             )
             log_activity(f"Claude: skipped after {new_retry} failures", feed=feed_name, level="warning")
         else:

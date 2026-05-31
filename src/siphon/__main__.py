@@ -39,6 +39,19 @@ def main():
         logging.error(f"Failed to load config: {e}")
         sys.exit(1)
 
+    # Durable file log alongside the database, so failures that surface days
+    # into a run survive a restart (console output does not).
+    try:
+        import os
+        from siphon.diagnostics import setup_file_logging
+
+        log_path = os.path.join(
+            os.path.dirname(config.storage.database) or ".", "siphon.log"
+        )
+        setup_file_logging(log_path, level=getattr(logging, args.log_level))
+    except Exception as e:
+        logging.warning(f"Could not set up file logging: {e}")
+
     # Set below-normal process priority on Windows for gaming friendliness
     try:
         import os

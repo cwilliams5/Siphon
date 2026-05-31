@@ -20,6 +20,8 @@ dependencies = [
     "httpx>=0.27",
     "pystray>=0.19",
     "Pillow>=10.0",
+    "psutil>=5.9",        # diagnostics: process memory / handle / thread counts
+    "nvidia-ml-py>=12.0",  # diagnostics: GPU VRAM usage (best-effort, no-op without NVIDIA)
 ]
 
 [project.optional-dependencies]

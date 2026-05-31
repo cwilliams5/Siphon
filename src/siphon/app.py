@@ -98,6 +98,12 @@ def create_app(config: SiphonConfig) -> FastAPI:
                     return
                 await process_claude(app.state.config, app.state.db)
 
+            async def _scheduled_resource_snapshot():
+                # Always runs (even while paused) — we want the resource trend
+                # regardless of queue activity. Best-effort; never raises.
+                from siphon.diagnostics import log_resource_snapshot
+                log_resource_snapshot()
+
             scheduler = AsyncIOScheduler()
             scheduler.add_job(
                 _scheduled_check_feeds, 'interval',
@@ -127,9 +133,16 @@ def create_app(config: SiphonConfig) -> FastAPI:
                 id='process_claude',
                 name='Process Claude',
             )
+            scheduler.add_job(
+                _scheduled_resource_snapshot, 'interval',
+                minutes=5,
+                id='resource_snapshot',
+                name='Resource snapshot',
+                next_run_time=datetime.now(),  # log one immediately at startup
+            )
             scheduler.start()
             app.state.scheduler = scheduler
-            logger.info("Scheduler started with 4 jobs")
+            logger.info("Scheduler started with 5 jobs")
         except Exception as e:
             logger.warning(f"Scheduler failed to start: {e}")
 
