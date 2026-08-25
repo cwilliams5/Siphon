@@ -71,6 +71,7 @@ Download functions set the correct next status atomically (`pending_whisper` if 
 - CUDA Whisper forced to 1 worker (CTranslate2 can't do concurrent GPU kernels)
 - Whisper prompt piped via stdin, not CLI arg (Windows 32K char limit)
 - Region-blocked videos filtered during discovery via `contentDetails.regionRestriction`
+- Claude CLI failures are typed in `ad_detect.py`: `ClaudeAuthError` (logged out → worker pauses 10 min, alert in tray + activity footer), `ClaudeTransientError` (529 / usage limit / stdin race → backoff, no strike), plain `ClaudeCLIError` (3 strikes → `LLM: skipped`). With `--output-format json` the CLI reports errors in stdout `result`, not stderr. The CLI is spawned at NORMAL priority on purpose (its hard-coded 3 s stdin guard loses races when starved)
 - yt-dlp with YouTube Premium cookies defaults to the `web_creator` client, which 403s without a PO token (since 2026-08). `downloader.py` pins `player_client` to `web_embedded,tv_downgraded` (override via `youtube.player_clients`) and retries anonymously if the cookie download fails. Downloads that suddenly 403 across every feed = check yt-dlp version and client selection, not cookies
 
 ## Commit Convention

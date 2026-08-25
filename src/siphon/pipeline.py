@@ -24,7 +24,15 @@ import os
 import time
 from datetime import datetime, timedelta, timezone
 
-from siphon.activity import check_paused, log_activity, worker_start, worker_done
+from siphon.activity import (
+    check_paused,
+    clear_alert,
+    log_activity,
+    set_alert,
+    worker_done,
+    worker_start,
+)
+from siphon.ad_detect import ClaudeAuthError, ClaudeTransientError
 from siphon.config import SiphonConfig, resolve_feed
 from siphon.db import Database
 from siphon.downloader import (
@@ -930,6 +938,68 @@ async def _process_one_whisper(ep: dict, config: SiphonConfig, db: Database) -> 
 # Worker 3: Claude ad detection
 # ---------------------------------------------------------------------- #
 
+# Claude CLI back-off.  Systemic failures — a logged-out CLI, API overload,
+# usage limits — pause the whole worker instead of burning each episode's
+# three strikes (which is how a two-day OAuth outage in Aug 2026 turned into
+# ~110 permanently skipped episodes).  Module state survives scheduler ticks.
+CLAUDE_AUTH_COOLDOWN_SECONDS = 600
+CLAUDE_TRANSIENT_BACKOFF_SECONDS = (120, 300, 900, 1800)
+CLAUDE_AUTH_ALERT_KEY = "claude_auth"
+CLAUDE_AUTH_ALERT_MESSAGE = (
+    "Claude CLI is logged out — run `claude /login` on the host. "
+    "Ad detection is paused; queued episodes resume automatically."
+)
+
+_claude_cooldown_until: float = 0.0
+_claude_cooldown_reason: str = ""
+_claude_transient_failures: int = 0
+
+
+def claude_cooldown_remaining() -> float:
+    """Seconds until the Claude worker may run again (0 when not paused)."""
+    return max(0.0, _claude_cooldown_until - time.time())
+
+
+def reset_claude_backoff() -> None:
+    """Forget any cooldown/backoff state (after a success, and in tests)."""
+    global _claude_cooldown_until, _claude_cooldown_reason, _claude_transient_failures
+    _claude_cooldown_until = 0.0
+    _claude_cooldown_reason = ""
+    _claude_transient_failures = 0
+
+
+def _pause_claude_worker(exc: Exception, feed_name: str) -> None:
+    """React to a systemic Claude failure: pause the worker, tell the operator once."""
+    global _claude_cooldown_until, _claude_cooldown_reason, _claude_transient_failures
+    already_paused = claude_cooldown_remaining() > 0
+    if isinstance(exc, ClaudeAuthError):
+        seconds = CLAUDE_AUTH_COOLDOWN_SECONDS
+        reason = "Claude CLI logged out"
+        if set_alert(CLAUDE_AUTH_ALERT_KEY, CLAUDE_AUTH_ALERT_MESSAGE):
+            log_activity(CLAUDE_AUTH_ALERT_MESSAGE, level="error")
+            logger.error("%s (%s)", CLAUDE_AUTH_ALERT_MESSAGE, exc)
+    else:
+        # A batch of concurrent failures is one incident, not several.
+        if not already_paused:
+            _claude_transient_failures += 1
+        idx = min(_claude_transient_failures, len(CLAUDE_TRANSIENT_BACKOFF_SECONDS)) - 1
+        seconds = CLAUDE_TRANSIENT_BACKOFF_SECONDS[max(idx, 0)]
+        reason = str(exc)[:80]
+        if not already_paused:
+            log_activity(f"Claude paused {seconds // 60} min: {reason}", feed=feed_name, level="warning")
+            logger.warning("Claude worker paused for %ds after transient failure: %s", seconds, exc)
+    _claude_cooldown_until = max(_claude_cooldown_until, time.time() + seconds)
+    _claude_cooldown_reason = reason
+
+
+def _note_claude_success() -> None:
+    """A CLI run succeeded: lift any cooldown and clear the logged-out alert."""
+    reset_claude_backoff()
+    if clear_alert(CLAUDE_AUTH_ALERT_KEY):
+        log_activity("Claude CLI is working again", level="info")
+        logger.info("Claude CLI recovered; alert cleared")
+
+
 _claude_lock = asyncio.Lock()
 
 
@@ -950,6 +1020,11 @@ async def _process_claude_inner(config: SiphonConfig, db: Database) -> None:
     while True:
         if check_paused():
             log_activity("Paused — stopping Claude")
+            return
+
+        remaining = claude_cooldown_remaining()
+        if remaining > 0:
+            logger.debug("Claude worker in cooldown for %.0fs more (%s)", remaining, _claude_cooldown_reason)
             return
 
         episodes = db.get_pending_claude(limit=concurrency)
@@ -1052,6 +1127,7 @@ async def _process_one_claude(ep: dict, config: SiphonConfig, db: Database) -> N
         )
 
         claude_duration = time.time() - t0_claude
+        _note_claude_success()
 
         all_segments = raw_result.get("segments", [])
         logger.info("Claude detected %d potential ad segments", len(all_segments))
@@ -1131,6 +1207,16 @@ async def _process_one_claude(ep: dict, config: SiphonConfig, db: Database) -> N
         if ffmpeg_duration > 0:
             log_activity(f"ffmpeg: cut applied ({_fmt_ffmpeg})", feed=feed_name)
 
+    except (ClaudeAuthError, ClaudeTransientError) as exc:
+        # Systemic, not this episode's fault: leave it queued with its retry
+        # count untouched and pause the worker instead.
+        logger.error("Claude unavailable for %s/%s (%s): %s", feed_name, video_id, type(exc).__name__, exc)
+        db.update_episode_status(
+            video_id, feed_name, "pending_claude",
+            llm_trim_status="error",
+            llm_segments_json=json.dumps({"error": str(exc)}),
+        )
+        _pause_claude_worker(exc, feed_name)
     except Exception as exc:
         # Full traceback to the file log — the exception type pins down whether
         # the Claude CLI subprocess failed to spawn, timed out, or returned junk.

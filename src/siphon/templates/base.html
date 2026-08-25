@@ -510,7 +510,11 @@
     })();
 
     function buildStatusLine(sys) {
-      /* Priority: Paused > Active workers > Checking jobs > Idle */
+      /* Priority: Alerts > Paused > Active workers > Checking jobs > Idle */
+      var alertKeys = sys.alerts ? Object.keys(sys.alerts) : [];
+      if (alertKeys.length > 0) {
+        return '\u26A0 ' + sys.alerts[alertKeys[0]];
+      }
       if (sys.pause_state && sys.pause_state !== 'running') {
         return 'Paused';
       }
@@ -538,6 +542,11 @@
           var sys = data.system || {};
           document.getElementById('activity-status').textContent = buildStatusLine(sys);
           var barHtml = '';
+          if (sys.alerts) {
+            Object.keys(sys.alerts).forEach(function(k) {
+              barHtml += '<span style="color:var(--error);">\u26A0 ' + sys.alerts[k] + '</span>';
+            });
+          }
           if (sys.pause_state && sys.pause_state !== 'running') {
             barHtml += '<span style="color:var(--warning);">[' + sys.pause_state.replace('_', ' ') + ']</span>';
           }

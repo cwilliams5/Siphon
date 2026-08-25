@@ -271,7 +271,7 @@ def _get_feed_display(request: Request) -> list[dict]:
 
 def _get_system_status(config: SiphonConfig, db: Database, app=None) -> dict:
     """Build a summary dict of system-wide status for the dashboard."""
-    from siphon.activity import get_active_counts, get_pause_state
+    from siphon.activity import get_active_counts, get_alerts, get_pause_state
 
     sched = config.schedule
     yt_recent = db.get_recent_download_count(hours=1, feed_type="youtube")
@@ -315,6 +315,7 @@ def _get_system_status(config: SiphonConfig, db: Database, app=None) -> dict:
         "whisper_queue": max(0, int(row["whisper_queue"] or 0) - active.get("whisper", 0)),
         "claude_queue": max(0, int(row["claude_queue"] or 0) - active.get("claude", 0)),
         "done_count": int(row["done_count"] or 0),
+        "alerts": get_alerts(),
         "active_dl": active.get("download", 0),
         "active_whisper": active.get("whisper", 0),
         "active_claude": active.get("claude", 0),

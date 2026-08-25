@@ -38,6 +38,7 @@
 <div style="padding:6px 12px; border-bottom:1px solid var(--border); color:var(--accent); font-weight:bold;">
   {{ current_status }}
   {% if status.pause_state != 'running' %}<span style="color:var(--warning); margin-left:12px;">[ {{ status.pause_state | replace('_', ' ') | title }} ]</span>{% endif %}
+  {% for key, message in (status.alerts or {}).items() %}<span style="color:var(--error); margin-left:12px;">&#9888; {{ message }}</span>{% endfor %}
 </div>
 <div class="status-section">
   <div class="status-row">

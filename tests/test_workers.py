@@ -432,6 +432,141 @@ class TestClaudeWorker:
 
 
 # ------------------------------------------------------------------ #
+# Claude back-off on systemic failures
+# ------------------------------------------------------------------ #
+
+
+class TestClaudeBackoff:
+    @pytest.fixture(autouse=True)
+    def _clean_state(self):
+        from siphon.activity import clear_alert
+        from siphon.pipeline import reset_claude_backoff
+        reset_claude_backoff()
+        clear_alert("claude_auth")
+        yield
+        reset_claude_backoff()
+        clear_alert("claude_auth")
+
+    def _queue_episode(self, db, download_dir, video_id="vid001"):
+        path = _create_media_file(download_dir, "llm-feed", video_id)
+        _create_transcript(download_dir, "llm-feed", video_id)
+        db.insert_episode(video_id=video_id, feed_name="llm-feed", title="Ep", status="pending_claude")
+        db.update_episode_status(video_id, "llm-feed", "pending_claude", file_path=path)
+
+    @patch("siphon.ad_detect.detect_ads")
+    async def test_auth_error_pauses_worker_and_raises_alert_without_strike(
+        self, mock_detect, config, db, download_dir
+    ):
+        from siphon.activity import get_alerts
+        from siphon.ad_detect import ClaudeAuthError
+        from siphon.pipeline import claude_cooldown_remaining
+
+        self._queue_episode(db, download_dir)
+        mock_detect.side_effect = ClaudeAuthError(
+            "Claude CLI failed (exit code 1): Failed to authenticate: OAuth session expired"
+        )
+
+        await process_claude(config, db)
+
+        ep = db.get_episode("vid001", "llm-feed")
+        assert ep["status"] == "pending_claude"
+        assert ep["llm_retry_count"] == 0
+        assert claude_cooldown_remaining() > 0
+        assert "claude_auth" in get_alerts()
+
+        # Cooldown active: the next tick must not touch the CLI at all
+        await process_claude(config, db)
+        assert mock_detect.call_count == 1
+
+    @patch("siphon.ad_detect.detect_ads")
+    async def test_transient_error_backs_off_without_strike_or_alert(
+        self, mock_detect, config, db, download_dir
+    ):
+        from siphon.activity import get_alerts
+        from siphon.ad_detect import ClaudeTransientError
+        from siphon.pipeline import CLAUDE_TRANSIENT_BACKOFF_SECONDS, claude_cooldown_remaining
+
+        self._queue_episode(db, download_dir)
+        mock_detect.side_effect = ClaudeTransientError(
+            "Claude CLI failed (exit code 1): API Error: 529 Overloaded"
+        )
+
+        await process_claude(config, db)
+
+        ep = db.get_episode("vid001", "llm-feed")
+        assert ep["status"] == "pending_claude"
+        assert ep["llm_retry_count"] == 0
+        assert 0 < claude_cooldown_remaining() <= CLAUDE_TRANSIENT_BACKOFF_SECONDS[0]
+        assert "claude_auth" not in get_alerts()
+
+    @patch("siphon.ad_detect.detect_ads")
+    async def test_concurrent_transient_failures_count_as_one_incident(
+        self, mock_detect, config, db, download_dir
+    ):
+        from siphon.ad_detect import ClaudeTransientError
+        from siphon.pipeline import CLAUDE_TRANSIENT_BACKOFF_SECONDS, claude_cooldown_remaining
+
+        for vid in ("vid001", "vid002", "vid003"):
+            self._queue_episode(db, download_dir, vid)
+        mock_detect.side_effect = ClaudeTransientError("API Error: 529 Overloaded")
+
+        await process_claude(config, db)
+
+        # Three failures in one batch stay on the first backoff step
+        assert claude_cooldown_remaining() <= CLAUDE_TRANSIENT_BACKOFF_SECONDS[0]
+        for vid in ("vid001", "vid002", "vid003"):
+            assert db.get_episode(vid, "llm-feed")["llm_retry_count"] == 0
+
+    @patch("siphon.ad_detect.detect_ads")
+    async def test_success_clears_alert_and_cooldown(self, mock_detect, config, db, download_dir):
+        from siphon.activity import get_alerts, set_alert
+        from siphon.pipeline import claude_cooldown_remaining
+
+        self._queue_episode(db, download_dir)
+        set_alert("claude_auth", "Claude CLI is logged out")
+        mock_detect.return_value = {"segments": []}
+
+        await process_claude(config, db)
+
+        assert db.get_episode("vid001", "llm-feed")["status"] == "done"
+        assert "claude_auth" not in get_alerts()
+        assert claude_cooldown_remaining() == 0
+
+    @patch("siphon.ad_detect.detect_ads")
+    async def test_plain_error_still_counts_as_strike(self, mock_detect, config, db, download_dir):
+        from siphon.ad_detect import ClaudeCLIError
+        from siphon.pipeline import claude_cooldown_remaining
+
+        self._queue_episode(db, download_dir)
+        mock_detect.side_effect = ClaudeCLIError("Claude CLI failed (exit code 1): Error: model not found")
+
+        await process_claude(config, db)
+
+        ep = db.get_episode("vid001", "llm-feed")
+        assert ep["status"] == "pending_claude"
+        assert ep["llm_retry_count"] == 1
+        assert claude_cooldown_remaining() == 0
+
+
+class TestAlerts:
+    def test_set_alert_notifies_once_per_change_and_on_clear(self):
+        from siphon.activity import clear_alert, get_alerts, register_alert_notifier, set_alert
+
+        seen = []
+        register_alert_notifier(lambda key, msg: seen.append((key, msg)) if key == "t" else None)
+        try:
+            assert set_alert("t", "one") is True
+            assert set_alert("t", "one") is False  # unchanged → no second toast
+            assert set_alert("t", "two") is True
+            assert get_alerts() == {"t": "two"}
+            assert clear_alert("t") is True
+            assert clear_alert("t") is False
+            assert seen == [("t", "one"), ("t", "two"), ("t", None)]
+        finally:
+            clear_alert("t")
+
+
+# ------------------------------------------------------------------ #
 # Pause system
 # ------------------------------------------------------------------ #
 

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import subprocess
+import sys
+import time
 from typing import Any
 
 from siphon.config import LLMConfig, ResolvedFeed
@@ -32,6 +35,47 @@ AD_SEGMENTS_SCHEMA = json.dumps({
     },
     "required": ["segments"],
 })
+
+CLI_TIMEOUT_SECONDS = 300
+
+
+class ClaudeCLIError(RuntimeError):
+    """The Claude CLI run failed for an episode-specific or unknown reason.
+
+    The pipeline counts these against the episode (three strikes → skipped).
+    """
+
+
+class ClaudeAuthError(ClaudeCLIError):
+    """The CLI is logged out or its OAuth session could not be refreshed.
+
+    Systemic: every run fails until someone runs ``claude /login`` on the
+    host, so the pipeline pauses the worker and raises an alert instead of
+    burning each episode's retries.
+    """
+
+
+class ClaudeTransientError(ClaudeCLIError):
+    """Server overload, usage limit, or the CLI's stdin race.
+
+    Expected to clear on its own; the pipeline backs off and retries later
+    without penalising the episode.
+    """
+
+
+# Matched against the lower-cased CLI error text.  Auth is checked first so
+# "OAuth session expired" can never be read as transient.  Numeric HTTP codes
+# need word boundaries: "150000 tokens" must not look like a 500.
+_AUTH_RE = re.compile(
+    r"failed to authenticate|oauth|not logged in|/login|authentication_error"
+    r"|invalid api key|invalid x-api-key|unauthorized|\b401\b"
+)
+_TRANSIENT_RE = re.compile(
+    r"overloaded|\b5(?:00|02|03|04|29)\b|rate.?limit|usage limit|limit reached|resets at"
+    r"|no stdin data received|internal server error|econnreset|etimedout|econnrefused"
+    r"|network error|fetch failed|connection error"
+)
+_STDIN_RACE_MARKER = "no stdin data received"
 
 
 def resolve_prompt(feed: ResolvedFeed, llm_config: LLMConfig) -> str:
@@ -92,6 +136,49 @@ def build_transcript_for_claude(
     return transcript_text
 
 
+def _cli_creationflags() -> int:
+    """Process-creation flags for the CLI subprocess.
+
+    Siphon itself runs at below-normal priority (see ``__main__``) and children
+    inherit that.  The CLI must be spawned at NORMAL explicitly: its CPU cost
+    is a few seconds of startup, but it guards stdin with a hard-coded 3 s
+    timer, and a below-normal process starved by ffmpeg, Whisper or a game
+    loses that race even though the prompt is already sitting in the pipe.
+    """
+    return 0x00000020 if sys.platform == "win32" else 0  # NORMAL_PRIORITY_CLASS
+
+
+def cli_failure_reason(result: subprocess.CompletedProcess) -> str:
+    """Best human-readable reason for a non-zero CLI exit.
+
+    With ``--output-format json`` the CLI reports auth, overload and API errors
+    inside the stdout envelope (``is_error: true``, ``result: "..."``) and
+    leaves stderr empty, so stdout is consulted first.
+    """
+    text = ""
+    try:
+        payload = json.loads(result.stdout or "")
+    except (json.JSONDecodeError, TypeError):
+        payload = None
+    if isinstance(payload, dict):
+        text = str(payload.get("result") or payload.get("error") or payload.get("message") or "")
+    if not text.strip():
+        text = result.stderr or ""
+    if not text.strip():
+        text = f"exit code {result.returncode} with no output"
+    return " ".join(text.split())
+
+
+def classify_cli_failure(reason: str) -> type[ClaudeCLIError]:
+    """Map a CLI failure message to the exception class the pipeline should see."""
+    low = reason.lower()
+    if _AUTH_RE.search(low):
+        return ClaudeAuthError
+    if _TRANSIENT_RE.search(low):
+        return ClaudeTransientError
+    return ClaudeCLIError
+
+
 def detect_ads(
     transcript_text: str,
     prompt: str,
@@ -105,6 +192,10 @@ def detect_ads(
     """Invoke Claude CLI to detect ad segments in a transcript.
 
     Returns the structured output dict: {"segments": [...]}
+
+    Raises :class:`ClaudeAuthError` / :class:`ClaudeTransientError` /
+    :class:`ClaudeCLIError` so the pipeline can tell a logged-out CLI or an
+    overloaded API apart from a failure specific to this episode.
     """
     formatted = build_transcript_for_claude(
         transcript_text, segments or [], words,
@@ -131,29 +222,36 @@ def detect_ads(
     logger.info("Running Claude CLI for ad detection (model=%s, effort=%s, prompt_len=%d)",
                 model, effort, len(full_prompt))
 
-    # Launch Claude CLI at below-normal priority
-    import sys
-    creationflags = 0x00004000 if sys.platform == "win32" else 0  # BELOW_NORMAL_PRIORITY_CLASS
-
-    result = subprocess.run(
-        cmd,
-        input=full_prompt,
-        capture_output=True,
-        text=True,
-        timeout=300,  # 5 minute timeout
-        creationflags=creationflags,
-    )
-
-    if result.returncode != 0:
-        logger.error("Claude CLI failed (rc=%d): %s", result.returncode, result.stderr[:500])
-        raise RuntimeError(f"Claude CLI failed with exit code {result.returncode}: {result.stderr[:200]}")
+    # The prompt goes through stdin: transcripts are far beyond the Windows
+    # 32K command-line limit.
+    for attempt in (1, 2):
+        result = subprocess.run(
+            cmd,
+            input=full_prompt,
+            capture_output=True,
+            text=True,
+            timeout=CLI_TIMEOUT_SECONDS,
+            creationflags=_cli_creationflags(),
+        )
+        if result.returncode == 0:
+            break
+        reason = cli_failure_reason(result)
+        if attempt == 1 and _STDIN_RACE_MARKER in reason.lower():
+            # The CLI's 3 s stdin guard fired before it read the prompt we had
+            # already written — a scheduling hiccup, not a real failure.
+            logger.warning("Claude CLI missed its stdin window, retrying once: %s", reason[:160])
+            time.sleep(2)
+            continue
+        err_cls = classify_cli_failure(reason)
+        logger.error("Claude CLI failed (rc=%d, %s): %s", result.returncode, err_cls.__name__, reason[:500])
+        raise err_cls(f"Claude CLI failed (exit code {result.returncode}): {reason[:300]}")
 
     # Parse the JSON output — claude --output-format json wraps in a result envelope
     try:
         output = json.loads(result.stdout)
     except json.JSONDecodeError as e:
         logger.error("Claude CLI output is not valid JSON: %s", result.stdout[:500])
-        raise RuntimeError(f"Claude CLI output is not valid JSON: {e}") from e
+        raise ClaudeCLIError(f"Claude CLI output is not valid JSON: {e}") from e
 
     # Extract structured_output from the envelope
     if "structured_output" in output:

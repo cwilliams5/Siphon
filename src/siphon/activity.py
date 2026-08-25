@@ -103,3 +103,57 @@ def get_active_counts() -> dict:
     """Return current active worker counts."""
     with _active_lock:
         return dict(_active_counts)
+
+
+# ------------------------------------------------------------------ #
+# Alerts — persistent, operator-actionable conditions (e.g. the Claude
+# CLI is logged out).  Keyed so a condition surfaces once, not once per
+# episode; cleared by the code path that observes recovery.
+# ------------------------------------------------------------------ #
+
+_alerts: dict[str, str] = {}
+_alert_lock = threading.Lock()
+_alert_notifiers: list = []  # callables (key, message) -> None, e.g. a tray toast
+
+
+def register_alert_notifier(fn) -> None:
+    """Register a callback invoked when an alert is raised or its text changes."""
+    with _alert_lock:
+        _alert_notifiers.append(fn)
+
+
+def set_alert(key: str, message: str) -> bool:
+    """Raise (or refresh) an alert.
+
+    Returns True when the alert is new or its message changed — callers use
+    that to log/notify exactly once per condition.
+    """
+    with _alert_lock:
+        changed = _alerts.get(key) != message
+        _alerts[key] = message
+        notifiers = list(_alert_notifiers) if changed else []
+    for fn in notifiers:
+        try:
+            fn(key, message)
+        except Exception:  # a broken notifier must never take the worker down
+            pass
+    return changed
+
+
+def clear_alert(key: str) -> bool:
+    """Drop an alert (notifiers get ``message=None``). Returns True if it was set."""
+    with _alert_lock:
+        was_set = _alerts.pop(key, None) is not None
+        notifiers = list(_alert_notifiers) if was_set else []
+    for fn in notifiers:
+        try:
+            fn(key, None)
+        except Exception:
+            pass
+    return was_set
+
+
+def get_alerts() -> dict[str, str]:
+    """Return active alerts as {key: message}."""
+    with _alert_lock:
+        return dict(_alerts)

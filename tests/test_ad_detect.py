@@ -7,7 +7,17 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from siphon.ad_detect import detect_ads, filter_segments, resolve_prompt
+from siphon import ad_detect
+from siphon.ad_detect import (
+    ClaudeAuthError,
+    ClaudeCLIError,
+    ClaudeTransientError,
+    classify_cli_failure,
+    cli_failure_reason,
+    detect_ads,
+    filter_segments,
+    resolve_prompt,
+)
 from siphon.config import FeedConfig, FeedDefaults, LLMConfig, resolve_feed
 
 
@@ -185,3 +195,114 @@ class TestDetectAds:
         assert "--effort" in call_args
         effort_idx = call_args.index("--effort")
         assert call_args[effort_idx + 1] == "low"
+
+
+# ------------------------------------------------------------------ #
+# Failure classification — auth / transient / other
+# ------------------------------------------------------------------ #
+
+def _cli_result(returncode=1, stdout="", stderr=""):
+    return MagicMock(returncode=returncode, stdout=stdout, stderr=stderr)
+
+
+def _error_envelope(text):
+    """What `claude -p --output-format json` prints on a failed run (stderr stays empty)."""
+    return json.dumps({"type": "result", "subtype": "success", "is_error": True, "result": text})
+
+
+class TestFailureClassification:
+    def test_reason_prefers_stdout_result_over_empty_stderr(self):
+        r = _cli_result(
+            stdout=_error_envelope("Failed to authenticate: OAuth session expired and could not be refreshed"),
+            stderr="",
+        )
+        assert cli_failure_reason(r) == "Failed to authenticate: OAuth session expired and could not be refreshed"
+
+    def test_reason_falls_back_to_stderr_then_exit_code(self):
+        assert cli_failure_reason(_cli_result(stdout="", stderr="  Error: boom\n")) == "Error: boom"
+        assert cli_failure_reason(_cli_result(returncode=3)) == "exit code 3 with no output"
+
+    @pytest.mark.parametrize("text", [
+        "Failed to authenticate: OAuth session expired and could not be refreshed",
+        "Not logged in. Please run /login",
+        "API Error: 401 authentication_error",
+    ])
+    def test_auth_errors(self, text):
+        assert classify_cli_failure(text) is ClaudeAuthError
+
+    @pytest.mark.parametrize("text", [
+        "API Error: 529 Overloaded. This is a server-side issue, usually temporary",
+        "Claude AI usage limit reached|1755990000",
+        "You've hit your limit. Your limit resets at 3pm",
+        "Warning: no stdin data received in 3s, proceeding without it. Error: Input must be provided",
+        "API Error: 503 Service Unavailable",
+        "fetch failed: ECONNRESET",
+    ])
+    def test_transient_errors(self, text):
+        assert classify_cli_failure(text) is ClaudeTransientError
+
+    @pytest.mark.parametrize("text", [
+        "Error: model not found",
+        "Prompt is too long: 150000 tokens > 100000 maximum",  # '500' inside a number is not HTTP 500
+        "exit code 1 with no output",
+    ])
+    def test_other_errors_count_as_strikes(self, text):
+        assert classify_cli_failure(text) is ClaudeCLIError
+
+
+class TestDetectAdsFailureHandling:
+    @patch("siphon.ad_detect.subprocess.run")
+    def test_auth_failure_raises_auth_error_with_real_reason(self, mock_run):
+        mock_run.return_value = _cli_result(
+            stdout=_error_envelope("Failed to authenticate: OAuth session expired and could not be refreshed"),
+        )
+        with pytest.raises(ClaudeAuthError, match="OAuth session expired"):
+            detect_ads("transcript", "prompt")
+
+    @patch("siphon.ad_detect.subprocess.run")
+    def test_overloaded_raises_transient_error(self, mock_run):
+        mock_run.return_value = _cli_result(stdout=_error_envelope("API Error: 529 Overloaded."))
+        with pytest.raises(ClaudeTransientError, match="529"):
+            detect_ads("transcript", "prompt")
+
+    @patch("siphon.ad_detect.time.sleep")
+    @patch("siphon.ad_detect.subprocess.run")
+    def test_stdin_race_is_retried_once(self, mock_run, mock_sleep):
+        stdin_race = _cli_result(
+            stderr="Warning: no stdin data received in 3s, proceeding without it.\n"
+                   "Error: Input must be provided either through stdin or as a prompt argument when using --print",
+        )
+        ok = _cli_result(returncode=0, stdout=json.dumps({"structured_output": {"segments": []}}))
+        mock_run.side_effect = [stdin_race, ok]
+
+        assert detect_ads("transcript", "prompt") == {"segments": []}
+        assert mock_run.call_count == 2
+
+    @patch("siphon.ad_detect.time.sleep")
+    @patch("siphon.ad_detect.subprocess.run")
+    def test_stdin_race_twice_is_transient(self, mock_run, mock_sleep):
+        stdin_race = _cli_result(stderr="Warning: no stdin data received in 3s, proceeding without it.")
+        mock_run.side_effect = [stdin_race, stdin_race]
+
+        with pytest.raises(ClaudeTransientError):
+            detect_ads("transcript", "prompt")
+        assert mock_run.call_count == 2
+
+    @patch("siphon.ad_detect.subprocess.run")
+    def test_unknown_failure_is_plain_cli_error_without_retry(self, mock_run):
+        mock_run.return_value = _cli_result(stderr="Error: model not found")
+
+        with pytest.raises(ClaudeCLIError) as excinfo:
+            detect_ads("transcript", "prompt")
+        assert type(excinfo.value) is ClaudeCLIError
+        assert mock_run.call_count == 1
+
+    @patch("siphon.ad_detect.subprocess.run")
+    def test_cli_spawned_at_normal_priority_on_windows(self, mock_run):
+        mock_run.return_value = _cli_result(
+            returncode=0, stdout=json.dumps({"structured_output": {"segments": []}}),
+        )
+        with patch.object(ad_detect.sys, "platform", "win32"):
+            detect_ads("transcript", "prompt")
+        # NORMAL_PRIORITY_CLASS — not BELOW_NORMAL, which loses the CLI's 3 s stdin race under load
+        assert mock_run.call_args.kwargs["creationflags"] == 0x00000020

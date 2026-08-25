@@ -110,11 +110,25 @@ class SiphonTray:
     def _update_menu(self):
         """Rebuild the menu to reflect current state."""
         if self._icon is not None:
-            self._icon.menu = self._build_menu()
+            try:
+                self._icon.menu = self._build_menu()
+            except Exception as exc:  # never let a menu refresh break a worker
+                logger.debug("Tray menu refresh failed: %s", exc)
+
+    def _on_alert(self, key: str, message: str | None) -> None:
+        """A worker raised (message) or cleared (None) an alert: toast + menu refresh."""
+        if self._icon is None:
+            return
+        if message:
+            try:
+                self._icon.notify(message[:200], "Siphon -- attention needed")
+            except Exception as exc:
+                logger.debug("Tray notification failed: %s", exc)
+        self._update_menu()
 
     def _build_menu(self):
         import pystray
-        from siphon.activity import get_pause_state
+        from siphon.activity import get_alerts, get_pause_state
 
         state = get_pause_state()
         if state == "paused":
@@ -147,8 +161,18 @@ class SiphonTray:
             pystray.MenuItem("5 (max)", _set_workers(5)),
         )
 
+        alerts = get_alerts()
+        alert_items = []
+        if alerts:
+            status_text += " -- attention needed"
+            alert_items = [
+                pystray.MenuItem(f"! {message[:70]}", None, enabled=False)
+                for message in alerts.values()
+            ]
+
         return pystray.Menu(
             pystray.MenuItem(f"Siphon ({status_text})", None, enabled=False),
+            *alert_items,
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Open Config", self._on_open_ui, default=True),
             pystray.MenuItem(pause_text, self._on_pause),
@@ -169,6 +193,9 @@ class SiphonTray:
             title="Siphon",
             menu=self._build_menu(),
         )
+
+        from siphon.activity import register_alert_notifier
+        register_alert_notifier(self._on_alert)
 
         logger.info("Starting system tray icon")
         self._icon.run()
