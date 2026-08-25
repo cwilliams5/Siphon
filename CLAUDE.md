@@ -71,6 +71,7 @@ Download functions set the correct next status atomically (`pending_whisper` if 
 - CUDA Whisper forced to 1 worker (CTranslate2 can't do concurrent GPU kernels)
 - Whisper prompt piped via stdin, not CLI arg (Windows 32K char limit)
 - Region-blocked videos filtered during discovery via `contentDetails.regionRestriction`
+- yt-dlp with YouTube Premium cookies defaults to the `web_creator` client, which 403s without a PO token (since 2026-08). `downloader.py` pins `player_client` to `web_embedded,tv_downgraded` (override via `youtube.player_clients`) and retries anonymously if the cookie download fails. Downloads that suddenly 403 across every feed = check yt-dlp version and client selection, not cookies
 
 ## Commit Convention
 Always run tests before committing. Include `Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>` in commit messages. Push after each commit. User prefers autonomous milestone commits, not batching.

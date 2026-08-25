@@ -9,6 +9,7 @@ import pytest
 
 from siphon.config import CookiesConfig, ResolvedFeed
 from siphon.downloader import (
+    DEFAULT_PLAYER_CLIENTS,
     build_download_opts,
     build_extract_opts,
     download_video,
@@ -355,3 +356,222 @@ class TestFindDownloadedFile:
         path, size = result
         assert path == str(audio_file)
         assert size == 512
+
+
+# ---------------------------------------------------------------------------
+# Player client selection (YouTube 403 with Premium cookies, 2026-08)
+# ---------------------------------------------------------------------------
+
+class TestPlayerClients:
+    def test_default_clients_pinned_when_cookies_used(
+        self, video_feed: ResolvedFeed, cookies: CookiesConfig
+    ) -> None:
+        opts = build_download_opts(video_feed, cookies, "/tmp/dl")
+        assert opts["cookiesfrombrowser"] == ("firefox",)
+        assert opts["extractor_args"] == {
+            "youtube": {"player_client": list(DEFAULT_PLAYER_CLIENTS)}
+        }
+
+    def test_default_clients_avoid_clients_youtube_rejects(self) -> None:
+        # web_creator 403s without a PO token; web is SABR-only (360p format 18)
+        assert DEFAULT_PLAYER_CLIENTS[0] == "web_embedded"
+        assert "web_creator" not in DEFAULT_PLAYER_CLIENTS
+        assert "web" not in DEFAULT_PLAYER_CLIENTS
+
+    def test_override_replaces_default_clients(
+        self, video_feed: ResolvedFeed, cookies: CookiesConfig
+    ) -> None:
+        opts = build_download_opts(video_feed, cookies, "/tmp/dl", ["tv", "mweb"])
+        assert opts["extractor_args"]["youtube"]["player_client"] == ["tv", "mweb"]
+
+    def test_empty_override_falls_back_to_default(
+        self, video_feed: ResolvedFeed, cookies: CookiesConfig
+    ) -> None:
+        opts = build_download_opts(video_feed, cookies, "/tmp/dl", [])
+        assert opts["extractor_args"]["youtube"]["player_client"] == list(DEFAULT_PLAYER_CLIENTS)
+
+    def test_anonymous_opts_leave_client_choice_to_ytdlp(
+        self, video_feed: ResolvedFeed, cookies: CookiesConfig
+    ) -> None:
+        opts = build_download_opts(video_feed, cookies, "/tmp/dl", use_cookies=False)
+        assert "cookiesfrombrowser" not in opts
+        assert "extractor_args" not in opts
+        # Everything else is unchanged
+        assert opts["format"] == "bestvideo[height<=1080]+bestaudio/best[height<=1080][vcodec!=none]"
+        assert opts["outtmpl"] == "/tmp/dl/testfeed/%(id)s.%(ext)s"
+
+
+# ---------------------------------------------------------------------------
+# download_video fallbacks
+# ---------------------------------------------------------------------------
+
+def _ydl_factory(mock_ydl_cls: MagicMock, *instances: MagicMock) -> None:
+    """Make each YoutubeDL(...) call hand out the next mock instance."""
+    it = iter(instances)
+
+    def make(opts: dict) -> MagicMock:
+        cm = MagicMock()
+        cm.__enter__ = MagicMock(return_value=next(it))
+        cm.__exit__ = MagicMock(return_value=False)
+        return cm
+
+    mock_ydl_cls.side_effect = make
+
+
+class TestDownloadVideoFallbacks:
+    @patch("siphon.downloader.yt_dlp.YoutubeDL")
+    def test_retries_anonymously_when_cookie_download_fails(
+        self, mock_ydl_cls: MagicMock, video_feed: ResolvedFeed, cookies: CookiesConfig
+    ) -> None:
+        import yt_dlp.utils
+
+        authed, anon = MagicMock(), MagicMock()
+        authed.extract_info.side_effect = yt_dlp.utils.DownloadError(
+            "ERROR: unable to download video data: HTTP Error 403: Forbidden"
+        )
+        anon.extract_info.return_value = {"id": "abc123"}
+        _ydl_factory(mock_ydl_cls, authed, anon)
+
+        result = download_video("https://youtu.be/abc123", video_feed, cookies, "/tmp/dl")
+
+        assert result["id"] == "abc123"
+        first_opts, second_opts = (c.args[0] for c in mock_ydl_cls.call_args_list)
+        assert first_opts["cookiesfrombrowser"] == ("firefox",)
+        assert first_opts["extractor_args"]["youtube"]["player_client"] == list(DEFAULT_PLAYER_CLIENTS)
+        assert "cookiesfrombrowser" not in second_opts
+        assert "extractor_args" not in second_opts
+        anon.extract_info.assert_called_once_with("https://youtu.be/abc123", download=True)
+
+    @patch("siphon.downloader.yt_dlp.YoutubeDL")
+    def test_no_anonymous_retry_on_success(
+        self, mock_ydl_cls: MagicMock, video_feed: ResolvedFeed, cookies: CookiesConfig
+    ) -> None:
+        authed = MagicMock()
+        authed.extract_info.return_value = {"id": "abc123"}
+        _ydl_factory(mock_ydl_cls, authed)
+
+        download_video("https://youtu.be/abc123", video_feed, cookies, "/tmp/dl")
+
+        assert mock_ydl_cls.call_count == 1
+
+    @patch("siphon.downloader.yt_dlp.YoutubeDL")
+    def test_passes_configured_clients_to_cookie_attempt(
+        self, mock_ydl_cls: MagicMock, video_feed: ResolvedFeed, cookies: CookiesConfig
+    ) -> None:
+        authed = MagicMock()
+        authed.extract_info.return_value = {"id": "abc123"}
+        _ydl_factory(mock_ydl_cls, authed)
+
+        download_video("https://youtu.be/abc123", video_feed, cookies, "/tmp/dl", ["tv"])
+
+        opts = mock_ydl_cls.call_args_list[0].args[0]
+        assert opts["extractor_args"]["youtube"]["player_client"] == ["tv"]
+
+    @patch("siphon.downloader.yt_dlp.YoutubeDL")
+    def test_reports_both_errors_when_anonymous_retry_also_fails(
+        self, mock_ydl_cls: MagicMock, video_feed: ResolvedFeed, cookies: CookiesConfig
+    ) -> None:
+        import yt_dlp.utils
+
+        authed, anon = MagicMock(), MagicMock()
+        authed.extract_info.side_effect = yt_dlp.utils.DownloadError("HTTP Error 403: Forbidden")
+        anon.extract_info.side_effect = yt_dlp.utils.DownloadError(
+            "Sign in to confirm you're not a bot"
+        )
+        _ydl_factory(mock_ydl_cls, authed, anon)
+
+        with pytest.raises(Exception) as excinfo:
+            download_video("https://youtu.be/abc123", video_feed, cookies, "/tmp/dl")
+
+        msg = str(excinfo.value)
+        assert msg.startswith("Sign in to confirm you're not a bot")
+        assert "with cookies: HTTP Error 403: Forbidden" in msg
+
+    @patch("siphon.downloader.yt_dlp.YoutubeDL")
+    def test_identical_errors_are_reported_once(
+        self, mock_ydl_cls: MagicMock, video_feed: ResolvedFeed, cookies: CookiesConfig
+    ) -> None:
+        import yt_dlp.utils
+
+        authed, anon = MagicMock(), MagicMock()
+        err = "Video unavailable. This video is private"
+        authed.extract_info.side_effect = yt_dlp.utils.DownloadError(err)
+        anon.extract_info.side_effect = yt_dlp.utils.DownloadError(err)
+        _ydl_factory(mock_ydl_cls, authed, anon)
+
+        with pytest.raises(Exception) as excinfo:
+            download_video("https://youtu.be/abc123", video_feed, cookies, "/tmp/dl")
+
+        assert str(excinfo.value) == err
+
+    @patch("siphon.downloader.yt_dlp.YoutubeDL")
+    def test_postprocessing_failure_retries_with_stream_copy_keeping_cookies(
+        self, mock_ydl_cls: MagicMock, sponsorblock_feed: ResolvedFeed, cookies: CookiesConfig
+    ) -> None:
+        import yt_dlp.utils
+
+        keyframes, stream_copy = MagicMock(), MagicMock()
+        keyframes.extract_info.side_effect = yt_dlp.utils.DownloadError(
+            "ERROR: Postprocessing: Conversion failed!"
+        )
+        stream_copy.extract_info.return_value = {"id": "abc123"}
+        _ydl_factory(mock_ydl_cls, keyframes, stream_copy)
+
+        result = download_video("https://youtu.be/abc123", sponsorblock_feed, cookies, "/tmp/dl")
+
+        assert result["id"] == "abc123"
+        first_opts, second_opts = (c.args[0] for c in mock_ydl_cls.call_args_list)
+        modify = [pp for pp in second_opts["postprocessors"] if pp["key"] == "ModifyChapters"]
+        assert modify and modify[0]["force_keyframes"] is False
+        # The download itself worked, so no anonymous retry happens
+        assert second_opts["cookiesfrombrowser"] == ("firefox",)
+        assert mock_ydl_cls.call_count == 2
+
+    @patch("siphon.downloader.yt_dlp.YoutubeDL")
+    def test_postprocessing_error_without_sponsorblock_goes_straight_to_anonymous_retry(
+        self, mock_ydl_cls: MagicMock, video_feed: ResolvedFeed, cookies: CookiesConfig
+    ) -> None:
+        import yt_dlp.utils
+
+        authed, anon = MagicMock(), MagicMock()
+        authed.extract_info.side_effect = yt_dlp.utils.DownloadError(
+            "ERROR: Postprocessing: Conversion failed!"
+        )
+        anon.extract_info.return_value = {"id": "abc123"}
+        _ydl_factory(mock_ydl_cls, authed, anon)
+
+        download_video("https://youtu.be/abc123", video_feed, cookies, "/tmp/dl")
+
+        assert mock_ydl_cls.call_count == 2
+        assert "cookiesfrombrowser" not in mock_ydl_cls.call_args_list[1].args[0]
+
+
+# ---------------------------------------------------------------------------
+# find_downloaded_file ignores yt-dlp leftovers
+# ---------------------------------------------------------------------------
+
+class TestFindDownloadedFileIgnoresLeftovers:
+    def test_prefers_final_file_over_partials_and_thumbnails(self, tmp_path) -> None:
+        feed_dir = tmp_path / "myfeed"
+        feed_dir.mkdir()
+        # "abc123.f400.mp4.part" sorts before "abc123.mp4" — the old glob()[0]
+        # picker would have returned the partial download.
+        (feed_dir / "abc123.f400.mp4.part").write_bytes(b"p" * 10)
+        (feed_dir / "abc123.f251.webm.ytdl").write_bytes(b"y" * 10)
+        (feed_dir / "abc123.webp").write_bytes(b"t" * 10)
+        (feed_dir / "abc123.temp.mp4").write_bytes(b"m" * 10)
+        (feed_dir / "abc123.keyframes.temp.mp4").write_bytes(b"k" * 10)
+        final = feed_dir / "abc123.mp4"
+        final.write_bytes(b"x" * 2048)
+
+        result = find_downloaded_file(str(tmp_path), "myfeed", "abc123")
+
+        assert result == (str(final), 2048)
+
+    def test_returns_none_when_only_leftovers_exist(self, tmp_path) -> None:
+        feed_dir = tmp_path / "myfeed"
+        feed_dir.mkdir()
+        (feed_dir / "abc123.f400.mp4.part").write_bytes(b"p" * 10)
+        (feed_dir / "abc123.webp").write_bytes(b"t" * 10)
+
+        assert find_downloaded_file(str(tmp_path), "myfeed", "abc123") is None

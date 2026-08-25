@@ -604,6 +604,7 @@ async def _download_youtube_episode(episode, resolved, config, db) -> None:
     await loop.run_in_executor(
         None, download_video, video_url, resolved,
         config.cookies, config.storage.download_dir,
+        config.youtube.player_clients,
     )
 
     result = find_downloaded_file(config.storage.download_dir, resolved.name, video_id)

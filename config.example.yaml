@@ -11,6 +11,12 @@ auth:
 youtube:
   api_key: "YOUR_YOUTUBE_DATA_API_KEY"
   country: "US"  # ISO country code — region-blocked videos are silently skipped
+  # yt-dlp player clients for cookie-authenticated downloads. Defaults to
+  # ["web_embedded", "tv_downgraded"]: yt-dlp's own pick for Premium sessions
+  # (web_creator) has returned HTTP 403 without a PO token since 2026-08.
+  # A download that fails with cookies is retried anonymously with yt-dlp's
+  # default clients. Set to ["default"] to let yt-dlp choose.
+  # player_clients: ["web_embedded", "tv_downgraded"]
 
 pocketcasts:
   email: ""

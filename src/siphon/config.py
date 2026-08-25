@@ -95,6 +95,10 @@ class YouTubeConfig(BaseModel):
     api_key: str
     quota_cooldown_hours: int = 4
     country: str = "US"
+    # yt-dlp player clients for cookie-authenticated downloads.  None uses
+    # Siphon's built-in default (siphon.downloader.DEFAULT_PLAYER_CLIENTS);
+    # ["default"] hands the choice back to yt-dlp.
+    player_clients: list[str] | None = None
 
 
 class PocketCastsConfig(BaseModel):

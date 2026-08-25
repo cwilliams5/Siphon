@@ -74,7 +74,8 @@ Siphon integrates with the Pocket Casts API to automatically clean up episodes y
 
 - Python 3.11+
 - ffmpeg on PATH
-- Deno on PATH (for yt-dlp's YouTube challenge solver)
+- Deno 2.3+ on PATH (for yt-dlp's YouTube challenge solver)
+- yt-dlp kept current (`pip install -U yt-dlp`) — YouTube-side changes routinely break releases more than a couple of months old
 - [Tailscale](https://tailscale.com/) with Funnel enabled and MagicDNS + HTTPS certs
 - [YouTube Data API v3](https://console.cloud.google.com/apis/api/youtube.googleapis.com) key
 - Firefox with YouTube Premium logged in (for cookies)
