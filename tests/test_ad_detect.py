@@ -298,6 +298,29 @@ class TestDetectAdsFailureHandling:
         assert mock_run.call_count == 1
 
     @patch("siphon.ad_detect.subprocess.run")
+    def test_prompt_is_fed_from_a_file_not_a_pipe(self, mock_run):
+        """A real file on stdin makes the prompt bytes instantly available, so the
+        CLI's hard-coded 3 s stdin guard cannot lose a scheduling race under load
+        (which is what kept happening with input= piping on 100 KB+ prompts)."""
+        seen = {}
+
+        def fake_run(cmd, **kwargs):
+            assert "input" not in kwargs
+            seen["stdin_content"] = kwargs["stdin"].read()
+            seen["path"] = kwargs["stdin"].name
+            return _cli_result(returncode=0, stdout=json.dumps({"structured_output": {"segments": []}}))
+
+        mock_run.side_effect = fake_run
+
+        detect_ads("some transcript text", "detect ads prompt")
+
+        assert "detect ads prompt" in seen["stdin_content"]
+        assert "some transcript text" in seen["stdin_content"]
+        # The temp file is cleaned up afterwards
+        import os
+        assert not os.path.exists(seen["path"])
+
+    @patch("siphon.ad_detect.subprocess.run")
     def test_cli_spawned_at_normal_priority_on_windows(self, mock_run):
         mock_run.return_value = _cli_result(
             returncode=0, stdout=json.dumps({"structured_output": {"segments": []}}),

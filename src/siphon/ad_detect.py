@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Any
 
@@ -222,29 +224,47 @@ def detect_ads(
     logger.info("Running Claude CLI for ad detection (model=%s, effort=%s, prompt_len=%d)",
                 model, effort, len(full_prompt))
 
-    # The prompt goes through stdin: transcripts are far beyond the Windows
-    # 32K command-line limit.
-    for attempt in (1, 2):
-        result = subprocess.run(
-            cmd,
-            input=full_prompt,
-            capture_output=True,
-            text=True,
-            timeout=CLI_TIMEOUT_SECONDS,
-            creationflags=_cli_creationflags(),
-        )
-        if result.returncode == 0:
-            break
-        reason = cli_failure_reason(result)
-        if attempt == 1 and _STDIN_RACE_MARKER in reason.lower():
-            # The CLI's 3 s stdin guard fired before it read the prompt we had
-            # already written — a scheduling hiccup, not a real failure.
-            logger.warning("Claude CLI missed its stdin window, retrying once: %s", reason[:160])
-            time.sleep(2)
-            continue
-        err_cls = classify_cli_failure(reason)
-        logger.error("Claude CLI failed (rc=%d, %s): %s", result.returncode, err_cls.__name__, reason[:500])
-        raise err_cls(f"Claude CLI failed (exit code {result.returncode}): {reason[:300]}")
+    # Hand the CLI a real file on stdin, not a pipe.  The CLI guards stdin with
+    # a hard 3 s timer that starts when it begins reading; feeding it through a
+    # pipe (input=) makes that a race against Python's writer thread being
+    # scheduled to fill the pipe — which loses under concurrency + CUDA Whisper
+    # load, especially for 100 KB+ prompts that overflow the OS pipe buffer and
+    # block the writer mid-send.  A file's bytes are available immediately, so
+    # the CLI's first read always beats the timer.  Transcripts are also far
+    # past the Windows 32 KB argv limit, which rules out a prompt argument.
+    fd, prompt_path = tempfile.mkstemp(prefix="siphon-claude-", suffix=".txt")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(full_prompt)
+
+        result = None
+        for attempt in (1, 2):
+            with open(prompt_path, "r", encoding="utf-8") as stdin_f:
+                result = subprocess.run(
+                    cmd,
+                    stdin=stdin_f,
+                    capture_output=True,
+                    text=True,
+                    timeout=CLI_TIMEOUT_SECONDS,
+                    creationflags=_cli_creationflags(),
+                )
+            if result.returncode == 0:
+                break
+            reason = cli_failure_reason(result)
+            if attempt == 1 and _STDIN_RACE_MARKER in reason.lower():
+                # A file on stdin should never trip the CLI's 3 s guard; keep one
+                # retry as a cheap safety net for any residual startup hiccup.
+                logger.warning("Claude CLI missed its stdin window, retrying once: %s", reason[:160])
+                time.sleep(2)
+                continue
+            err_cls = classify_cli_failure(reason)
+            logger.error("Claude CLI failed (rc=%d, %s): %s", result.returncode, err_cls.__name__, reason[:500])
+            raise err_cls(f"Claude CLI failed (exit code {result.returncode}): {reason[:300]}")
+    finally:
+        try:
+            os.remove(prompt_path)
+        except OSError:
+            pass
 
     # Parse the JSON output — claude --output-format json wraps in a result envelope
     try:
